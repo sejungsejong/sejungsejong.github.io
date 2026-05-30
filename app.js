@@ -2052,20 +2052,17 @@ function showHallPopup(src, hostEl, opts) {
       const pr = hostEl.getBoundingClientRect();
       const cx = opts.clickX - pr.left;
       const cy = opts.clickY - pr.top;
-      // 자연 사이즈 → panel 안에서의 표시 사이즈 (작게 — + 옆에 contextual 한 카드 톤)
       const maxW = pr.width  * 0.30;
       const maxH = pr.height * 0.40;
       img.style.maxWidth  = maxW + 'px';
       img.style.maxHeight = maxH + 'px';
       const iw = img.offsetWidth  || maxW;
       const ih = img.offsetHeight || maxH;
-      // 기본 우측, opts.side === 'left' 면 강제 좌측
+      // 기본: + 우측에 딱 붙여 표시. opts.side === 'left' 면 강제 좌측.
+      //  오버플로 시 반대로 flip 하지 않음 → 패널 경계에 clamp (+ 가까이 유지)
       const wantLeft = opts.side === 'left';
       let left = wantLeft ? cx - iw - 18 : cx + 18;
       let top  = cy - ih / 2;
-      // 강제 방향에서 넘치면 반대로 flip
-      if (!wantLeft && left + iw > pr.width - 8) left = cx - iw - 18;
-      if (wantLeft  && left < 8)                 left = cx + 18;
       if (left < 8) left = 8;
       if (left + iw > pr.width - 8) left = pr.width - iw - 8;
       if (top  < 8) top  = 8;
