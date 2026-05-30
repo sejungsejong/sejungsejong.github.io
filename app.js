@@ -608,10 +608,22 @@ function playHallTransition(t, hall, onDone) {
   };
   Promise.all([videoEndedP, hallPreloadP]).then(finish);
 
-  // 재생 시작 — 사용자 click 이후 호출이므로 자동재생 정책 통과
-  vids.forEach((v) => {
-    const p = v.play();
-    if (p && p.catch) p.catch((err) => console.warn('[transition] play failed:', err));
+  // 4 비디오 모두 canplay (HAVE_FUTURE_DATA, readyState >= 3) 까진 기다린 뒤 동시 play.
+  //  버퍼 상태 달라서 한 비디오만 늦게 시작되어 보이는 현상 차단. canplay 면 즉시 시작 가능,
+  //  나머지는 백그라운드 버퍼링 — canplaythrough(전부 다운로드) 까진 기다리지 않음.
+  const readyP = vids.map((v) => new Promise((resolve) => {
+    if (v.readyState >= 3) return resolve();
+    const onReady = () => { v.removeEventListener('canplay', onReady); resolve(); };
+    v.addEventListener('canplay', onReady);
+    setTimeout(resolve, 3000);     // 안전장치 — 3s 후 강제 진행
+  }));
+  Promise.all(readyP).then(() => {
+    vids.forEach((v) => { try { v.currentTime = 0; } catch {} });
+    // 같은 microtask 에서 4 play() 호출 → 브라우저 같은 frame 에 시작 시도
+    vids.forEach((v) => {
+      const p = v.play();
+      if (p && p.catch) p.catch((err) => console.warn('[transition] play failed:', err));
+    });
   });
 }
 
