@@ -1,0 +1,1966 @@
+/* ===== Reset & Base ===== */
+*, *::before, *::after {
+  margin: 0; padding: 0; box-sizing: border-box;
+}
+
+:root {
+  --bg: #0a0a0f;
+  --panel-bg: #12121a;
+  --border: #1e1e2e;
+  --text: #e0e0e0;
+  --text-dim: #666;
+  --accent: #6c63ff;
+  --accent-glow: rgba(108, 99, 255, 0.35);
+
+  /* Physical screen dimensions — set at runtime by config.js (layout.*) */
+  /* Default = 모든 패널 1920×1200 (16:10) — 좌·중앙위·우 1행, 중앙아래 2행 */
+  --panel-w:   1920;
+  --top-h:     1200;
+  --bot-h:     1200;
+  --grid-rows: 1200fr 1200fr;
+  --scene-w:   5760;   /* 3 × panel-w */
+  --scene-h:   2400;   /* top-h + bot-h */
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: #000;     /* letterbox color around the scene */
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ==========================================================
+   COMMON SCENE GRID (L-shape, aspect-locked, fit-to-viewport)
+     - 각 씬은 동일한 4-패널 L자형 grid 를 공유
+     - 좌·중앙위·우 : 1행 (각 1920×1200 → 비율 16:10)
+     - 중앙 아래(바닥): 2행 가운데 칸 (1920×1920 → 1:1)
+     - 양쪽 아래 칸은 비워둠 (letterbox 처리)
+   ========================================================== */
+.standby,
+.landing-space,
+.landing,
+.main-view,
+.hall-transition {
+  position: fixed;
+  /* scene 비율(--scene-w / --scene-h, 기본 5760/2400 = 2.4) 유지 + 화면에 fit.
+     - viewport 가 scene 비율보다 넓으면 height = 100vh, width 는 비례 (좌우 letterbox)
+     - viewport 가 scene 비율보다 좁으면 width  = 100vw, height 는 비례 (상하 letterbox)
+     운영계(T자, 비율 2.4)에서는 letterbox 0, 맥북 등 다른 비율에선 가운데 정렬 + 검정 띠 */
+  width:  min(100vw, calc(100vh * var(--scene-w) / var(--scene-h)));
+  height: min(100vh, calc(100vw * var(--scene-h) / var(--scene-w)));
+  top:  50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: var(--grid-rows);
+  grid-template-areas:
+    "pl  pct pr"
+    ".   pcb .";
+}
+
+/* Map every scene's panels to the shared grid areas */
+.standby-left,
+.ls-left,
+.landing-left,
+.panel-left            { grid-area: pl; }
+
+.standby-center-top,
+.ls-center-top,
+.landing-center-top,
+.panel.center-top      { grid-area: pct; }
+
+.standby-right,
+.ls-right,
+.landing-right,
+.panel-right           { grid-area: pr; }
+
+.standby-center-bottom,
+.ls-center-bottom,
+.landing-center-bottom,
+.panel.center-bottom   { grid-area: pcb; }
+
+/* Hall transition panel mapping */
+.ht-left          { grid-area: pl; }
+.ht-center-top    { grid-area: pct; }
+.ht-right         { grid-area: pr; }
+.ht-center-bottom { grid-area: pcb; }
+
+/* Hall entry guide (진입 시 4 panel 사용방법 안내 + 50% dim 오버레이).
+   main-view 안에서 4 panel grid 와 같은 grid 로 cell 분할 — 어떤 viewport 비율이든 정확히 같이 stretch. */
+.hall-entry-guide {
+  position: absolute;
+  inset: 0;
+  z-index: 280;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: var(--grid-rows);
+  grid-template-areas:
+    "pl  pct pr"
+    ".   pcb .";
+  visibility: hidden;
+  pointer-events: none;   /* 부모는 항상 pass-through — 활성 cell 만 events 캡처 */
+}
+.hall-entry-guide.show { visibility: visible; }
+.heg-cell {
+  position: relative;
+  background: rgba(0, 0, 0, 0.5);    /* 50% dim */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: pointer;
+  pointer-events: auto;   /* 활성 cell 만 클릭 캡처 */
+  transition: background-color 0.3s ease;
+}
+.heg-cell.dismissed {
+  background: transparent;
+  pointer-events: none;   /* dismissed → pass-through, 하부 패널 인터랙션 가능 */
+}
+.heg-cell .heg-alert {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.heg-cell.dismissed .heg-alert {
+  opacity: 0;
+  transform: scale(0.95);
+}
+.heg-left          { grid-area: pl; }
+.heg-center-top    { grid-area: pct; }
+.heg-center-bottom { grid-area: pcb; background: transparent; pointer-events: none; }   /* 바닥은 dim/클릭 없음 */
+/* 우 패널: 5:2 split (좌 5 = 작가노트, 우 2 = exit/로비나가기) — 각 영역이 별도 cell 이라 따로 dismiss */
+.heg-right-wrap {
+  grid-area: pr;
+  display: flex;
+  flex-direction: row;
+}
+.heg-right-slides { flex: 0 0 69.75%; }   /* bg 무색 영역과 정확 매칭 */
+.heg-right-exit   { flex: 0 0 30.25%; }
+.heg-alert {
+  padding: 9px 16px;
+  background: rgba(20, 20, 20, 0.92);
+  color: #fff;
+  font-size: clamp(11px, 1.4vh, 14px);
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  white-space: nowrap;
+  text-align: center;
+}
+
+/* Hall popup modal — dim 배경 (B관 light phase) + 클릭 좌표 배치 모드 (A관 좌 슬라이드) */
+.hall-popup {
+  position: absolute;
+  inset: 0;
+  z-index: 300;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+  cursor: pointer;
+}
+.hall-popup.show {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+/* 클릭 위치 모드 — dim 배경 없음. 이미지만 panel 안 클릭 좌표 근처에 absolute. */
+.hall-popup.no-dim {
+  background: transparent;
+}
+.hall-popup-img {
+  max-width: 60%;
+  max-height: 70%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.4));
+  transform: scale(0.94);
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.hall-popup.show .hall-popup-img {
+  transform: scale(1);
+}
+
+/* Hall transition overlay (해태 B관 진입 전) — main-view 위에 떴다가 17s 후 fade-out.
+   fade-out duration(0.9s) 이 mainView opacity transition(0.6s) 보다 길어야 mainView
+   가 아래에서 완전히 페이드인 끝난 후 overlay 가 마지막에 사라짐 — 로비 잔상 차단. */
+.hall-transition {
+  z-index: 250;
+  background: #000;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.9s ease;
+  pointer-events: none;
+}
+.hall-transition.show {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;       /* 재생 중 다른 click 차단 */
+}
+.ht-panel {
+  position: relative;
+  overflow: hidden;
+  background: #000;
+}
+.ht-panel video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* ======================================================
+   STANDBY SCREEN (first view; click to enter landing)
+   ====================================================== */
+.standby {
+  z-index: 300;
+  background: #000;
+  transition: opacity 0.8s ease;
+}
+
+.standby.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.standby-panel { background: #000; }
+
+.standby-center-top,
+.standby-center-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  min-height: 0;
+  position: relative;
+}
+
+/* "정면 화면" — hover area to enter next scene */
+.standby-center-top {
+  cursor: pointer;
+}
+
+.standby-1 {
+  display: block;
+  max-width: 90%;
+  height: auto;
+  object-fit: contain;
+}
+
+/* 2 + 3 are absolutely positioned at the center of .standby-center-bottom
+   so they always sit centered in that panel regardless of size. */
+.standby-2,
+.standby-3 {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  pointer-events: none;
+  object-fit: contain;
+}
+
+.standby-2 {
+  transform: translate(-50%, -50%) rotate(0deg);
+  animation: standby-rotate 24s linear infinite;
+  z-index: 1;
+}
+
+.standby-3 {
+  transform: translate(-50%, -50%);
+  z-index: 2;
+}
+
+@keyframes standby-rotate {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(-360deg); }
+}
+
+/* ======================================================
+   LANDING SPACE (transient scene between standby & lobby)
+   ====================================================== */
+.landing-space {
+  /* z-index: above .landing(100), below .standby(300) */
+  z-index: 250;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+}
+
+.landing-space.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ls-panel {
+  position: relative;
+  overflow: hidden;
+}
+
+.ls-center-top,
+.ls-center-bottom {
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Walls and floor fill their panels */
+.ls-wall,
+.ls-floor {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Front-facing content overlays the front wall in center-top, centered */
+.ls-front {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 80%;
+  max-height: 80%;
+  object-fit: contain;
+  z-index: 2;
+}
+
+/* ======================================================
+   EXHIBITION SPACE (전시공간 — 4-panel split)
+   ====================================================== */
+.landing {
+  z-index: 100;
+  background: #fff;
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+
+.landing.hidden {
+  opacity: 0;
+  /* Combine centering translate with the scale-out flourish */
+  transform: translate(-50%, -50%) scale(1.05);
+  pointer-events: none;
+}
+
+.landing-panel {
+  position: relative;
+  overflow: hidden;
+}
+
+.landing-center-top,
+.landing-center-bottom {
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Walls / floor: 작품 layer 위에 떠서 아치 밖으로 넘어가는 부분을 자연스럽게 가림.
+   wall PNG 의 투명 아치 영역으로만 뒤의 작품이 보이는 액자 효과. */
+.landing-wall,
+.landing-floor {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* 벽 + 객체 — 처음엔 안 보임, .scene-ready 클래스 켜질 때 한 번에 즉시 노출 (fade 없음) */
+.landing-wall,
+.landing-floor,
+.landing-items {
+  opacity: 0;
+}
+.landing.scene-ready .landing-wall,
+.landing.scene-ready .landing-floor,
+.landing.scene-ready .landing-items {
+  opacity: 1;
+}
+
+/* 작품 layer 는 wall 보다 뒤에 — 아치 밖으로 넘는 부분은 wall 에 가려짐 */
+.landing-items {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.landing-art-wrap {
+  position: absolute;
+  /* wall 자산의 투명 아치 영역에 맞춤 — Pillow 측정값 기반.
+     - 액자 폭 14.76%, 좌→우 중심 17.18% / 49.94% / 82.71%
+     - 액자 vert: top 23.89%, height ~50%
+     - 작품 사진 자연 비율(1047/1741 ≈ 0.601) 유지 */
+  /* width 28% — 아치 밖으로 넘어가는 부분은 wall 이 가려서 액자 안에만 보임 */
+  width: 28%;
+  aspect-ratio: 1047 / 1741;   /* 작품 자연 비율 — 크롭/왜곡 없음 */
+  top: 17%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  cursor: pointer;
+  /* fade-in handled by .landing.visible */
+  opacity: 0;
+  transform: translateY(8px);
+  transition: transform 0.3s ease;
+}
+
+/* 각 패널 안의 3 자리 — center 좌표 유지하면서 width 28% 적용 (절반 14%)
+   center 17.18% / 49.94% / 82.71% → 좌상단 3.18% / 35.94% / 68.71% */
+.landing-items > .landing-art-wrap:nth-child(1) { left:  3.18%; }
+.landing-items > .landing-art-wrap:nth-child(2) { left: 35.94%; }
+.landing-items > .landing-art-wrap:nth-child(3) { left: 68.71%; }
+
+.landing.active .landing-art-wrap {
+  animation: art-fade-in 0.55s ease forwards;
+}
+
+.landing-items > .landing-art-wrap:nth-child(1) { animation-delay: 0.20s; }
+.landing-items > .landing-art-wrap:nth-child(2) { animation-delay: 0.55s; }
+.landing-items > .landing-art-wrap:nth-child(3) { animation-delay: 0.90s; }
+
+@keyframes art-fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.landing-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;          /* 자연 비율 유지 — 크롭 없음 */
+  object-position: top center;
+  position: relative;
+  z-index: 2;
+  transition: filter 0.35s ease, transform 0.12s ease;
+}
+
+/* 호버 (마우스 over 또는 터치 press 진입) → 백라이팅 글로우.
+   .art-glow 클래스는 JS pointerenter 에서 부여 (터치도 동작).
+   z-index 는 wall 뒤(1) 유지 — 글로우가 wall 의 액자 내부에서만 새어나오는 효과. */
+.landing-art-wrap.art-glow .landing-art {
+  filter:
+    drop-shadow(0 0 14px  rgba(255, 235, 180, 0.85))
+    drop-shadow(0 0 30px  rgba(255, 200, 120, 0.65))
+    drop-shadow(0 0 60px  rgba(255, 180,  80, 0.45))
+    brightness(1.08);
+  animation: art-pulse 2.2s ease-in-out infinite;
+}
+@keyframes art-pulse {
+  0%, 100% {
+    filter:
+      drop-shadow(0 0 14px  rgba(255, 235, 180, 0.85))
+      drop-shadow(0 0 30px  rgba(255, 200, 120, 0.65))
+      drop-shadow(0 0 60px  rgba(255, 180,  80, 0.45))
+      brightness(1.08);
+  }
+  50% {
+    filter:
+      drop-shadow(0 0 18px  rgba(255, 240, 200, 0.95))
+      drop-shadow(0 0 42px  rgba(255, 210, 140, 0.80))
+      drop-shadow(0 0 80px  rgba(255, 190, 100, 0.55))
+      brightness(1.14);
+  }
+}
+
+/* 클릭 누름 효과 — pointerdown 동안 살짝 작아짐 + 어두워짐 */
+.landing-art-wrap:active .landing-art {
+  transform: scale(0.94);
+  transition: transform 0.06s ease, filter 0.06s ease;
+  filter:
+    drop-shadow(0 0 14px  rgba(255, 235, 180, 0.85))
+    drop-shadow(0 0 30px  rgba(255, 200, 120, 0.65))
+    drop-shadow(0 0 60px  rgba(255, 180,  80, 0.45))
+    brightness(0.92);
+  animation: none;
+}
+
+/* "준비 중" alert — landing-panel 의 직접 자식 (wall 위로 떠올라야).
+   JS 가 클릭된 작품 위쪽 좌표로 left/top 을 px 로 설정. */
+.landing-art-alert {
+  position: absolute;
+  /* left/top 은 JS 에서 px 로 — 작품 정 중앙 */
+  transform: translate(-50%, -50%);
+  padding: 5px 9px;
+  text-align: center;
+  background: rgba(20, 20, 20, 0.9);
+  color: #fff;
+  font-size: 0.58rem;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  z-index: 30;                /* wall(2) 위 — 작품/벽 모두 덮어쓰기 */
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  white-space: nowrap;
+}
+
+.landing-art-alert.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) translateY(-4px);
+}
+
+/* Center-top artworks (target='main') — subtle "interactive" affordance */
+.landing-art-wrap.is-link:hover {
+  transform: translateY(-4px);
+}
+
+/* ======================================================
+   MAIN 3-PANEL VIEW
+   ====================================================== */
+.main-view {
+  /* gap이 작은 디바이더 라인을 만든다 */
+  gap: 1px;
+  background: #fff;       /* hall 기본 배경 (config.halls.<key>.background로 덮음) */
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+}
+
+/* When inside a hall, panel base bg switches to white to match hall theme */
+.main-view .panel {
+  background: #fff;
+}
+
+.main-view.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.back-hint {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 200;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+
+.main-view.visible .back-hint {
+  opacity: 0.5;
+}
+
+/* ===== Panel base ===== */
+.panel {
+  background: var(--panel-bg);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-header {
+  position: absolute;
+  top: 16px;
+  left: 20px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+  z-index: 10;
+  opacity: 0.5;
+}
+
+/* ===== Left Panel: 3D ===== */
+.panel-left { cursor: default; }
+
+#three-canvas {
+  width: 100%; height: 100%; display: block;
+}
+
+/* ===== Center Panels: Top (image + detail) / Bottom (image) ===== */
+/* Both are now top-level grid panels, placed via grid-area in the common rule. */
+.center-top {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.center-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--panel-bg);
+  padding: 16px;
+  min-height: 0;
+}
+
+.center-bottom-image {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 12px;
+  display: block;
+}
+
+.center-image-wrap {
+  position: relative;
+  width: 90%;
+  height: 90%;
+  overflow: hidden;
+  border-radius: 12px;
+  transition: transform 0.15s ease;
+}
+
+.center-image {
+  width: 100%; height: 100%;
+  object-fit: cover; display: block;
+  transition: transform 0.6s ease, filter 0.6s ease;
+}
+
+.detail-trigger {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  transition: opacity 0.4s;
+}
+
+.detail-label {
+  background: rgba(108, 99, 255, 0.85);
+  color: #fff;
+  padding: 10px 28px;
+  border-radius: 30px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  letter-spacing: 1px;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 4px 20px var(--accent-glow);
+  display: inline-block;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+.detail-overlay {
+  position: absolute; inset: 0;
+  background: rgba(10, 10, 15, 0.92);
+  backdrop-filter: blur(12px);
+  padding: 40px 30px;
+  display: flex; flex-direction: column; justify-content: center;
+  opacity: 0; transform: translateY(20px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  pointer-events: none; z-index: 4;
+}
+
+.detail-trigger:hover ~ .detail-overlay,
+.detail-overlay:hover {
+  opacity: 1; transform: translateY(0); pointer-events: auto;
+}
+.detail-trigger:hover { opacity: 0; }
+
+.center-image-wrap:has(.detail-overlay:hover) .detail-trigger,
+.center-image-wrap:has(.detail-trigger:hover) .detail-trigger { opacity: 0; }
+
+.center-image-wrap:has(.detail-overlay:hover) .center-image,
+.center-image-wrap:has(.detail-trigger:hover) .center-image {
+  transform: scale(1.05); filter: blur(4px);
+}
+
+.detail-overlay h2 { font-size: 1.4rem; margin-bottom: 14px; color: var(--accent); }
+.detail-overlay p { color: var(--text-dim); line-height: 1.6; margin-bottom: 14px; }
+.detail-overlay ul { list-style: none; margin-bottom: 18px; }
+.detail-overlay li { padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+.detail-overlay li::before { content: "▸ "; color: var(--accent); }
+
+.detail-tags { display: flex; gap: 8px; flex-wrap: wrap; }
+.tag {
+  background: var(--accent); color: #fff;
+  padding: 4px 14px; border-radius: 20px;
+  font-size: 0.7rem; font-weight: 500;
+}
+
+/* ======================================================
+   HALL — RIGHT PANEL
+   - 기본: split 5:2 (slides | toggle) — B관용
+   - .layout-note: 단일 1면 작가노트존 — A관용 (bg + header + 카드 슬라이드 + exit)
+   ====================================================== */
+.hall-right {
+  display: grid;
+  /* 백그라운드.png 의 무색(슬라이드 영역)/그림(벽 corner = exit 영역) 경계 69.75% 에 정확 매칭 */
+  grid-template-columns: 69.75% 30.25%;
+  gap: 1px;
+  background: var(--border);
+  padding: 0;
+  /* override .panel base flex-direction:column so children sit side-by-side */
+  flex-direction: row;
+}
+
+/* bg/header 는 layout-note 모드(A관 작가노트존)에서만 보임 */
+.hall-right-bg,
+.hall-right-header {
+  display: none;
+}
+
+/* ── layout-note (A관 작가노트존) ───────────────────
+   기본 .hall-right 의 5:2 grid 유지. bg/header 는 slides 영역(5) 안에 absolute.
+   exit 는 우(2) 영역의 .hall-right-toggle 이 그대로 담당. */
+.hall-right.layout-note .hall-right-slides {
+  background: transparent;
+  position: relative;
+  overflow: hidden;
+  container-type: inline-size;
+}
+
+/* layout-note(A관) 의 exit-button — 갤러리 벽 bg 가 패널 전체에 깔리고, 그 위에 버튼 자산 contain */
+.hall-right.layout-note .hall-right-toggle {
+  background: transparent;
+}
+.hall-right.layout-note .hall-toggle-img {
+  object-fit: contain;
+  background: transparent;
+  /* 버튼 자산 자체를 더 작게 — 큼지막한 배경 제거 효과 */
+  padding: 42% 22%;
+}
+.hall-right.layout-note .hall-toggle-overlay {
+  display: none;   /* 자산 자체에 "로비로 나가기" 텍스트 포함 → 라벨 오버레이 불필요 */
+}
+.hall-right.layout-note .hall-right-slides {
+  background: transparent;
+}
+
+/* bg 는 hall-right 직속 자식 — 5:2 grid 모두 덮음 */
+.hall-right.layout-note .hall-right-bg {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+  pointer-events: none;
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
+}
+
+/* ── immersive 모드 (A관 토르소 이머시브 공간) ──
+   우 패널은 분할 없이 right.png 한 장으로 채우고, 로비 나가기 영역은 absolute overlay 로 우측에
+   gradient(transparent → black 50%) + 텍스트 표시. toggle 클릭 → returnToLobby (기존 핸들러). */
+.hall-right.immersive {
+  grid-template-columns: 1fr;
+}
+.hall-right.immersive .hall-right-slides {
+  grid-column: 1 / -1;
+  position: relative;
+  background: transparent;
+}
+.hall-right.immersive .hall-right-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 36%;
+  height: 100%;
+  /* 좌측은 투명, 우측으로 가면서 검정 50%까지 그라디언트 — right.png 자연스럽게 어둡게 */
+  background: linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.5) 100%);
+  cursor: pointer;
+  z-index: 5;
+}
+.hall-right.immersive .hall-toggle-img {
+  display: none;   /* immersive 는 별도 자산 안 사용 — 텍스트만 */
+}
+.hall-right.immersive .hall-toggle-overlay {
+  /* base .hall-toggle-overlay 의 absolute inset:0 + flex center 상속 — 텍스트 정확히 중앙 */
+  background: transparent;
+  pointer-events: none;
+}
+.hall-right.immersive .hall-toggle-label {
+  opacity: 1;                                /* 항상 표시 (호버 없이도) */
+  transform: none;
+  color: #fff;
+  font-size: clamp(10px, 1.2vh, 13px);       /* 글자 축소 */
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+  white-space: nowrap;
+}
+
+.hall-right.layout-note .hall-right-header {
+  display: block;
+  position: absolute;
+  /* 슬라이드 영역(5) 상단에 가로 띠 — 너비 92%, 비율 3031/782 = 3.876 */
+  top: 4%;
+  left: 4%;
+  width: 92%;
+  height: auto;
+  aspect-ratio: 3031 / 782;
+  object-fit: contain;
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* layout-note 에서 슬라이드 카드 — 이미지 1장 풀-블리드 + 헤더 아래 위치 */
+.hall-right.layout-note .hall-slide-track {
+  /* 헤더(top 4%~~30%) 아래 시작 — 슬라이드 영역 높이의 약 절반 차지 */
+  top: 35%;
+  bottom: 0;
+  height: auto;
+}
+.hall-right.layout-note .hall-slide {
+  flex: 0 0 100cqi;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  box-sizing: border-box;
+}
+.hall-right.layout-note .hall-slide-image {
+  max-width: 100%;
+  max-height: 100%;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+/* Seamless 모드 (B관) — 좌(5)·우(2) 영역에 같은 회화가 한 장처럼 이어지게.
+   - 회색 1px 띠 제거 (gap/background 무효화)
+   - 좌(5) 이미지: 폭 140% (= 패널 전체폭) · 좌측 정렬 → 회화의 왼쪽 5/7 슬라이스 노출
+   - 우(2) 이미지: 폭 350% (= 패널 전체폭) · 우측 정렬 → 회화의 오른쪽 2/7 슬라이스 노출
+   - object-fit: cover 가 같은 (패널폭 × 패널높이) 박스 기준으로 동작 → 두 슬라이스의 스케일·세로 위치 일치 */
+.hall-right.seamless {
+  gap: 0;
+  background: transparent;
+}
+.hall-right.seamless .hall-right-slides,
+.hall-right.seamless .hall-right-toggle {
+  background: transparent;
+}
+.hall-right.seamless .hall-static-img > img {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 140%;     /* 5fr 영역 기준 패널 전체폭 (7/5) */
+  height: 100%;
+  object-fit: cover;
+}
+.hall-right.seamless .hall-toggle-img {
+  left: auto;
+  right: 0;
+  width: 350%;     /* 2fr 영역 기준 패널 전체폭 (7/2) */
+  height: 100%;
+  object-fit: cover;
+}
+
+.hall-right-slides {
+  position: relative;
+  overflow: hidden;
+  background: #fff;
+  /* container query — 자식이 100cqi 로 컨테이너 폭 100% 잡을 수 있게 */
+  container-type: inline-size;
+}
+
+.hall-slide-track {
+  position: absolute;
+  top: 0; left: 0;
+  height: 100%;
+  display: flex;
+  cursor: grab;
+  user-select: none;
+  touch-action: pan-y;        /* 세로 스크롤은 허용, 가로 제스처는 캡처 */
+  will-change: transform;
+}
+
+.hall-slide-track.dragging {
+  cursor: grabbing;
+}
+
+/* Each slide = full slide-area (한 번에 한 장 노출). 사진(left) + 텍스트(right) 50:50 */
+.hall-slide {
+  flex: 0 0 100cqi;             /* 슬라이드 영역 폭 100% */
+  height: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 16px 18px;
+  background: #fff;
+  box-sizing: border-box;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.hall-slide img { -webkit-user-drag: none; pointer-events: none; }
+
+.hall-slide-photo {
+  position: relative;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #fff;        /* 사진 letterbox 영역 — 흰색 */
+}
+
+.hall-slide-photo img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;             /* 사진 컨테이너를 꽉 채움 (가장자리 약간 crop) */
+  display: block;
+}
+
+.hall-slide-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;       /* 사진 옆에 세로 중앙 정렬 */
+  color: #1a1a1a;
+  min-width: 0;
+}
+
+.hall-slide-num {
+  font-size: clamp(28px, 6vh, 56px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: #111;
+  margin-bottom: 6px;
+}
+
+.hall-slide-divider {
+  width: 32px;
+  height: 2px;
+  background: #111;
+  margin-bottom: 8px;
+}
+
+.hall-slide-title {
+  font-size: clamp(11px, 1.6vh, 14px);
+  font-weight: 700;
+  line-height: 1.3;
+  color: #111;
+  margin: 0 0 8px 0;
+}
+
+.hall-slide-body {
+  font-size: clamp(9px, 1.2vh, 11px);
+  font-weight: 400;
+  line-height: 1.5;
+  color: #555;
+  margin: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 8;
+  -webkit-box-orient: vertical;
+}
+
+.hall-right-toggle {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  background: #fff;
+}
+
+.hall-toggle-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: filter 0.3s ease;
+  z-index: 1;
+}
+
+/* 호버 시: 기존 이미지(20-1.png)를 살짝 어둡게 + 라벨 노출 (다른 이미지로 덮지 않음) */
+.hall-right-toggle:hover .hall-toggle-img { filter: brightness(0.78); }
+
+/* B관 스타일 — 회화는 그대로 보이지만 항상 검정 반투명이 덮이고 라벨이 노출됨 */
+.hall-right-toggle.always-overlay .hall-toggle-img        { filter: brightness(0.55); }
+.hall-right-toggle.always-overlay:hover .hall-toggle-img  { filter: brightness(0.42); }
+.hall-right-toggle.always-overlay .hall-toggle-overlay    { background: rgba(0, 0, 0, 0.32); }
+.hall-right-toggle.always-overlay:hover .hall-toggle-overlay { background: rgba(0, 0, 0, 0.50); }
+.hall-right-toggle.always-overlay .hall-toggle-label {
+  opacity: 1;
+  transform: translateY(0);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
+}
+
+.hall-toggle-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0);
+  transition: background 0.3s ease;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.hall-right-toggle:hover .hall-toggle-overlay { background: rgba(0, 0, 0, 0.18); }
+
+.hall-toggle-label {
+  color: #fff;
+  font-size: clamp(11px, 1.5vh, 14px);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  line-height: 1.4;
+  text-align: center;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  white-space: pre-line;
+}
+
+.hall-right-toggle:hover .hall-toggle-label {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Hall: center-bottom shows static floor image, no padding/dark bg */
+.main-view .center-bottom {
+  background: #fff;
+  padding: 0;
+}
+.main-view .center-bottom-image {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  object-fit: contain;
+  border-radius: 0;
+}
+
+/* ======================================================
+   HALL — LEFT PANEL (사진 슬라이더 + fading hint + 핫스팟)
+   ====================================================== */
+#hall-left {
+  background: #fff;
+  position: relative;          /* hint/슬라이더 absolute 배치 기준 */
+  padding: 0;
+}
+
+.hall-left-slides {
+  position: absolute;
+  inset: 0;                    /* 패널 전체를 채움 */
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  /* container query — 자식이 100cqi 로 컨테이너 폭 100% 잡을 수 있게 */
+  container-type: inline-size;
+}
+
+/* 트랙은 flex item — JS 가 transform: translateX 만 갱신하면 됨 */
+.hall-left-track {
+  height: 100%;
+  display: flex;
+  cursor: grab;
+  user-select: none;
+  touch-action: pan-y;
+  will-change: transform;
+}
+
+.hall-left-track.dragging { cursor: grabbing; }
+
+/* 각 슬라이드 = 슬라이드 영역 폭 100% × 높이 100% — 한 화면에 한 장만 보임 */
+.hall-left-slide {
+  position: relative;
+  flex: 0 0 100cqi;             /* container query inline size = .hall-left-slides 폭 */
+  height: 100%;
+  background: #fff;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* Slide 4 색상 variation 카드 (좌 슬라이드 안 absolute overlay) — 흰 둥근 카드 + 4 동그라미.
+   기본 숨김. slide-4 의 + 클릭 → .show 추가 → 등장. 동그라미 active 시 흰색 체크 표시. */
+.color-variation {
+  position: absolute;
+  left: 4%;
+  bottom: 5%;
+  width: 34%;
+  padding: 10px 14px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  z-index: 4;
+  pointer-events: auto;
+  display: none;
+}
+.color-variation.show { display: block; }
+
+/* 카드 닫기 + 버튼 — 슬라이드 안 +디자인(흰 원 + 짙은 회색 +)과 같은 톤. 45도 돌려 × 형태로 닫기 의도 표현. */
+.cv-close {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  width: clamp(24px, 3vh, 32px);
+  height: clamp(24px, 3vh, 32px);
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  padding: 0;
+  z-index: 2;
+}
+.cv-close::before,
+.cv-close::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top:  50%;
+  width: 45%;
+  height: 2.5px;
+  background: #2a2a2a;
+  border-radius: 1px;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+.cv-close::after { transform: translate(-50%, -50%) rotate(-45deg); }
+.cv-close:hover { background: #f4f4f4; }
+.cv-close:active { transform: scale(0.94); }
+.cv-label {
+  font-size: clamp(11px, 1.3vh, 13px);
+  font-weight: 700;
+  color: #111;
+  margin-bottom: 8px;
+}
+.cv-dots {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-start;
+  align-items: center;
+}
+.cv-dot {
+  position: relative;
+  width: clamp(20px, 2.8vh, 28px);
+  height: clamp(20px, 2.8vh, 28px);
+  border-radius: 50%;
+  background: var(--c);
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.15s ease;
+}
+.cv-dot:hover { transform: scale(1.06); }
+.cv-dot:active { transform: scale(0.94); }
+.cv-dot.active::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 50%;
+  height: 25%;
+  /* 체크 모양 — 흰 두 막대 (border 의 좌/하 만 흰) */
+  border-left:   2.5px solid #fff;
+  border-bottom: 2.5px solid #fff;
+  transform: translate(-50%, -70%) rotate(-45deg);
+}
+
+.hall-left-slide img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;             /* 패널 영역을 꽉 채움 (가장자리 약간 crop 가능) */
+  display: block;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+/* +버튼 (핫스팟) — 동그라미 안에 +
+   - left/top 은 "지칭하는 지점"의 좌표 (% 또는 px, JS 가 inline 으로 set)
+   - 버튼 자체는 transform 으로 그 지점에서 좌측 상단으로 떨어진 곳에 그려짐
+   - 직경(width/height)은 JS 에서 size 옵션으로 inline 지정 (기본은 CSS 값) */
+.hall-hotspot {
+  position: absolute;
+  width: clamp(56px, 6.5vh, 80px);
+  height: clamp(56px, 6.5vh, 80px);
+  /* 버튼의 우하단 모서리가 (left, top) 좌표 근처에 오도록 = 지점에서 좌측 상단으로 오프셋 */
+  transform: translate(calc(-100% - 10px), calc(-100% - 10px));
+  border-radius: 50%;
+  background: #fff;
+  border: 2.5px solid #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 5;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
+}
+
+/* Invisible 핫스팟 — 자산 안에 + 마크가 그려진 위치 위에 덮는 클릭존.
+   외형/+ 마크/그림자 모두 없애고 클릭만 받음. 자산 + 마크 정 중앙에 작은 영역.
+   호버 효과(transform/box-shadow) 도 무력화. */
+.hall-hotspot-invisible {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  transform: translate(-50%, -50%) !important;
+  /* + 마크 위에 — 외형은 보이지 않지만 터치 영역 관대하게 */
+  width: clamp(80px, 9vh, 130px) !important;
+  height: clamp(80px, 9vh, 130px) !important;
+  transition: none !important;
+}
+.hall-hotspot-invisible::before,
+.hall-hotspot-invisible::after {
+  display: none !important;
+}
+.hall-hotspot-invisible:hover,
+.hall-hotspot-invisible.active {
+  background: transparent !important;
+  box-shadow: none !important;
+  transform: translate(-50%, -50%) !important;
+}
+
+.hall-hotspot::before,
+.hall-hotspot::after {
+  content: '';
+  position: absolute;
+  background: #000;
+}
+
+.hall-hotspot::before {           /* 가로 막대 (+의 −) */
+  width: 50%;
+  height: 3px;
+}
+
+.hall-hotspot::after {            /* 세로 막대 (+의 |) */
+  width: 3px;
+  height: 50%;
+}
+
+.hall-hotspot:hover {
+  /* hover 시에도 동일한 좌측상단 오프셋 유지 */
+  transform: translate(calc(-100% - 10px), calc(-100% - 10px)) scale(1.1);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.hall-hotspot.active {
+  background: #000;
+}
+.hall-hotspot.active::before,
+.hall-hotspot.active::after {
+  background: #fff;
+}
+
+/* 말풍선 — +버튼 클릭 시 main-view 좌표계 기준으로 위치 set + .show
+   호버 패널을 벗어나면 자동 hide */
+.hall-bubble {
+  position: absolute;
+  z-index: 50;                 /* main-view 의 패널들 위로 떠야 함 */
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, calc(-100% - 14px));
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.hall-bubble.show {
+  opacity: 1;
+  transform: translate(-50%, calc(-100% - 20px));
+  pointer-events: auto;
+}
+
+.hall-bubble-inner {
+  position: relative;
+  background: #fff;
+  color: #1a1a1a;
+  padding: 12px 16px;
+  border-radius: 12px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.18);
+  font-size: clamp(11px, 1.4vh, 13px);
+  line-height: 1.5;
+  font-weight: 500;
+  max-width: 220px;
+  min-width: 140px;
+  text-align: center;
+}
+
+/* 말풍선 꼬리 (아래쪽 가운데) */
+.hall-bubble-inner::after {
+  content: '';
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left:  7px solid transparent;
+  border-right: 7px solid transparent;
+  border-top:   7px solid #fff;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.06));
+}
+
+/* 검정 반투명 말풍선 — B관 같이 회화 위에 띄울 때 (config.halls.<key>.bubbleStyle: 'dark') */
+.hall-bubble.dark .hall-bubble-inner {
+  background: rgba(0, 0, 0, 0.72);
+  color: #fafafa;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(2px);
+}
+.hall-bubble.dark .hall-bubble-inner::after {
+  border-top-color: rgba(0, 0, 0, 0.72);
+  filter: none;
+}
+
+/* ======================================================
+   HALL — C관 STORYTELLING 오버레이 (단일 mp4 → 4분할)
+   - .hall-c-canvas: 각 패널의 자식으로 삽입되는 캔버스. 절대좌표로 패널을 꽉 채움.
+   - .story-mode  : storytelling 진행 중 임시로 #main-view 에 부여되는 클래스.
+                    핫스팟·hint 가리고, 우측 토글 라벨/오버레이를 항상 노출.
+   ====================================================== */
+.hall-c-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: #000;
+  z-index: 4;          /* 정적 이미지(z=1)·toggle img(z=1) 위, overlay(z=2) 아래에서 위로 끌어올림 */
+  pointer-events: none;
+}
+
+/* storytelling 동안: 핫스팟·hint 숨김 */
+.main-view.story-mode .hall-hotspot { display: none !important; }
+.main-view.story-mode .hall-hint    { display: none !important; }
+
+/* storytelling 동안 우측 토글: 캔버스 위에 검정 반투명 + 라벨 항상 노출 */
+.main-view.story-mode .hall-toggle-overlay {
+  z-index: 5;
+  background: rgba(0, 0, 0, 0.36);
+}
+.main-view.story-mode .hall-right-toggle:hover .hall-toggle-overlay {
+  background: rgba(0, 0, 0, 0.52);
+}
+.main-view.story-mode .hall-toggle-label {
+  opacity: 1;
+  transform: translateY(0);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
+}
+
+/* ======================================================
+   HALL — 정적 이미지 패널 (B관: 좌·우·중앙위 단일 회화)
+   div 래퍼 + img 구조 — 핫스팟(+버튼) 이 div 의 자식으로 들어감
+   ====================================================== */
+.hall-static-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 1;
+  user-select: none;
+}
+.hall-static-img > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  -webkit-user-drag: none;
+  pointer-events: none;                       /* 호버는 +버튼만 받게 */
+}
+
+/* ======================================================
+   HALL — 진입 시 안내 hint (가운데 떴다 페이드아웃)
+   ====================================================== */
+.hall-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 30;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.7s ease;
+}
+
+.hall-hint.show     { opacity: 1; }
+.hall-hint.fade-out { opacity: 0; }
+
+/* 공통 스펙 — 좌·중앙 hint 동일 (크기/패딩/모서리/폰트). 색만 변형 */
+.hall-hint-left,
+.hall-hint-center {
+  font-size: clamp(13px, 1.7vh, 16px);
+  font-weight: 500;
+  padding: 12px 26px;
+  border-radius: 26px;
+  letter-spacing: 0.3px;
+  text-align: center;
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+}
+
+/* 좌·중앙 위 — 동일 스타일 (검정 계열 + 흰 글자) */
+.hall-hint-left,
+.hall-hint-center {
+  background: rgba(40, 40, 40, 0.88);
+  color: #fff;
+}
+
+/* ======================================================
+   HALL — 중앙 위 GLB 회전 핫존 (캔버스 위 원형 영역)
+   - 보이지 않는 hit-area; 이 안에서 호버 이동량 → GLB 회전
+   - 바깥(배경)에서 호버하면 UI 메뉴가 뜸
+   ====================================================== */
+.hall-glb-zone {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  /* 패널 중앙 영역 거의 전부 — 좌/우 가장자리(~14% 씩) 만 UI spawn 으로 남김 */
+  width: var(--hall-glb-zone-size, 80%);
+  height: var(--hall-glb-zone-size, 80%);
+  border-radius: 50%;
+  z-index: 5;
+  cursor: default;
+  user-select: none;
+  pointer-events: auto;          /* 명시 — 클릭 캡처 보장 */
+  background: transparent;
+}
+
+/* ======================================================
+   HALL — 중앙 위 UI 오버레이 (인라인 SVG, 호버 시 토글, X 호버 시 닫힘)
+   - .hall-ui: <svg> 컨테이너 (정방형)
+   - .hall-ui-wedge: 5개 부채꼴 (path) — 각각 클릭 가능
+   - .hall-ui-close: 가운데 흰 원 — close 액션
+   ====================================================== */
+/* 기존 SVG hall-ui / hall-sub-ui 는 새 image-based glb-ui 로 대체됨 — 완전 비활성 */
+.hall-ui, .hall-sub-ui { display: none !important; }
+
+.hall-ui {
+  position: absolute;
+  width: var(--hall-ui-size, 22%);
+  aspect-ratio: 1 / 1;
+  pointer-events: none;          /* default 차단 — .show 시 활성화 */
+  z-index: 15;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.92);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  overflow: visible;             /* drop shadow 잘리지 않게 */
+}
+
+/* ======================================================
+   새 image-based GLB UI (4 stage: main / bg / material / qr)
+   - .glb-ui : 전체 컨테이너 (absolute, click 좌표 기준 spawn)
+   - .glb-stage : 한 단계의 UI (이미지 bg + 버튼 absolute)
+   - .glb-btn  : 무색 동그란 클릭존 (이미지 위 원형 영역에 정렬)
+   - .glb-color: 색상 선택 버튼 — 선택 시 V 체크 표시
+   - 위치는 인라인 --x / --y (이미지 안의 % 좌표) 로 결정
+   ====================================================== */
+.glb-caption {
+  position: absolute;
+  left: 50%;
+  bottom: 5%;
+  width: 36%;
+  transform: translateX(-50%);
+  z-index: 8;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.glb-ui {
+  position: absolute;
+  width: clamp(160px, 17%, 260px);
+  aspect-ratio: 1 / 1;
+  z-index: 16;
+  transform: translate(-50%, -50%);
+  visibility: hidden;
+  pointer-events: none;
+}
+.glb-ui.show {
+  visibility: visible;
+  pointer-events: auto;
+}
+.glb-stage {
+  position: absolute;
+  inset: 0;
+  display: none;
+}
+.glb-stage.active { display: block; }
+.glb-stage-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.glb-btn {
+  position: absolute;
+  left: var(--x, 50%);
+  top:  var(--y, 50%);
+  transform: translate(-50%, -50%);
+  width: 22%;
+  height: 22%;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+.glb-btn-center {
+  width: 14%;
+  height: 14%;
+}
+.glb-btn-back {
+  /* 자산의 좌상단 작은 동그라미보다 클릭 영역을 더 관대하게 — 터치 정확도 보완 */
+  width: 22%;
+  height: 22%;
+}
+.glb-color {
+  position: absolute;
+  left: var(--x, 50%);
+  top:  var(--y, 50%);
+  transform: translate(-50%, -50%);
+  width: 22%;
+  height: 22%;
+  border-radius: 50%;
+  background: transparent;   /* 색상은 자산 이미지에 이미 칠해져 있음 */
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+/* 색상 선택 V 체크 — 동그라미 정 중앙에 큼지막한 흰 V */
+.glb-color.active::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top:  50%;
+  width: 55%;
+  height: 30%;
+  border-left:   5px solid #fff;
+  border-bottom: 5px solid #fff;
+  /* 사각형 회전축이 box 중앙 → translate(-50%, -50%) 면 V 의 시각 중심이 dot 중심에 정확히 옴 */
+  transform: translate(-50%, -50%) rotate(-45deg);
+  pointer-events: none;
+}
+/* QR stage 는 UI_QR.png 의 이미 그려진 QR(큰) 과 생성 QR 이 겹침 → stage-bg 제외, 흰 원 + 생성 QR + 뒤로 버튼 */
+.glb-stage[data-stage="qr"] .glb-stage-bg { display: none; }
+.glb-stage[data-stage="qr"] {
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+/* 뒤로 버튼 — 흰 원 좌상단에 작은 회색 동그라미로 표시 (QR stage 에서 시각화) */
+.glb-stage[data-stage="qr"] .glb-btn-back {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1.5px solid #999;
+  width: 16%;
+  height: 16%;
+  z-index: 2;
+}
+.glb-stage[data-stage="qr"] .glb-btn-back::before {
+  content: '←';
+  position: absolute;
+  left: 50%;
+  top:  50%;
+  transform: translate(-50%, -50%);
+  font-size: 1.1em;
+  color: #444;
+  font-weight: 700;
+}
+.glb-qr-image {
+  position: absolute;
+  left: 18%;
+  top:  18%;
+  width: 64%;
+  height: 64%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.hall-ui.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+  pointer-events: auto;
+}
+
+/* 부채꼴 — 호버 / dwell 단계별 색상 */
+.hall-ui-wedge {
+  fill: #e2e2e2;
+  stroke: #ffffff;
+  stroke-width: 2;
+  cursor: pointer;
+  transition: fill 0.15s ease;
+}
+.hall-ui-wedge:hover    { fill: #d4d4d4; }
+.hall-ui-wedge.dwelling { fill: #b8b8b8; }
+
+/* 가운데 흰 원 (close) */
+.hall-ui-close {
+  fill: #ffffff;
+  cursor: pointer;
+  transition: fill 0.15s ease;
+}
+.hall-ui-close:hover    { fill: #f0f0f0; }
+.hall-ui-close.dwelling { fill: #d8d8d8; }
+
+/* ======================================================
+   HALL — 세로 리스트 UI (시안: macOS 컨텍스트 메뉴 스타일)
+   - .hall-list-ui : 패널 컨테이너 (반투명 어두운 배경 + 둥근 사각 + 그림자)
+   - .hall-list-item : 한 줄 (아이콘 + 라벨). hover/dwell 상태별 배경 변화
+   - .hall-list-close : 우상단 흰 원 X 버튼
+   - .show 클래스로 등장/숨김 + pointer-events 활성
+   ====================================================== */
+.hall-list-ui {
+  position: absolute;
+  /* 패널 사이즈 — 중앙위 너비 대비 비례 (단일 모니터 1920 기준 ~280px 정도) */
+  width: 14.5%;
+  min-width: 200px;
+  padding: 8px 6px;
+  background: rgba(48, 48, 54, 0.86);
+  border-radius: 14px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #f5f5f5;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  z-index: 15;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.94);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.hall-list-ui.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+  pointer-events: auto;
+}
+
+.hall-list-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.hall-list-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: clamp(11px, 1.3vh, 14px);
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  color: #f0f0f0;
+  transition: background 0.15s ease;
+  user-select: none;
+}
+.hall-list-item + .hall-list-item { margin-top: 1px; }
+.hall-list-item:hover    { background: rgba(255, 255, 255, 0.10); }
+.hall-list-item.dwelling { background: rgba(255, 255, 255, 0.20); }
+
+.hall-list-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  color: #e8e8e8;
+}
+.hall-list-icon svg { display: block; }
+
+.hall-list-label { flex: 1 1 auto; }
+
+/* 우상단 close X — 패널 바깥에 살짝 떨어진 흰 원 (시안: 패널 외부에 별도 원) */
+.hall-list-close {
+  position: absolute;
+  top: -14px;
+  right: -14px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #1a1a1a;
+  border: 1.5px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+  z-index: 1;
+}
+.hall-list-close:hover    { background: #f0f0f0; }
+.hall-list-close.dwelling { background: #d8d8d8; }
+
+/* ======================================================
+   HALL — 서브 UI (배경색/재질색/QR)
+   - 메인 UI 와 동일 크기 원
+   - 메인 UI 가 떠 있는 위치 기준 아래에 배치 (clamping은 JS)
+   - 좌상단 ← 뒤로 버튼은 원 바깥에 살짝 떨어진 작은 원
+   - .show 시 등장 + pointer-events 활성
+   ====================================================== */
+.hall-sub-ui {
+  position: absolute;
+  width: var(--hall-ui-size, 22%);
+  aspect-ratio: 1 / 1;
+  pointer-events: none;
+  z-index: 16;                                /* 메인 UI(15) 위 */
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.92);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  overflow: visible;
+}
+.hall-sub-ui.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+  pointer-events: auto;
+}
+
+.hall-sub-wheel {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+  pointer-events: none;                       /* 컨테이너는 이벤트 통과 — wedge/reset 만 잡음 */
+}
+
+.hall-sub-wedge {
+  stroke: #ffffff;
+  stroke-width: 2;
+  cursor: pointer;
+  pointer-events: none;                       /* default — .show 일 때만 활성 */
+  transition: filter 0.15s ease, transform 0.15s ease;
+  transform-origin: 100px 100px;              /* viewBox 중심 */
+}
+.hall-sub-ui.show .hall-sub-wedge { pointer-events: auto; }
+.hall-sub-wedge:hover    { filter: brightness(1.08); }
+.hall-sub-wedge.dwelling { filter: brightness(0.78); }
+
+.hall-sub-reset {
+  fill: #ffffff;
+  cursor: pointer;
+  pointer-events: none;                       /* default — .show 일 때만 활성 */
+  transition: fill 0.15s ease;
+}
+.hall-sub-ui.show .hall-sub-reset { pointer-events: auto; }
+.hall-sub-reset:hover    { fill: #f0f0f0; }
+.hall-sub-reset.dwelling { fill: #d8d8d8; }
+
+/* 좌상단 ← 뒤로 버튼 (원 바깥 작은 흰 원) */
+.hall-sub-back {
+  position: absolute;
+  top: -10%;
+  left: -10%;
+  width: 22%;
+  height: 22%;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1.5px solid #d8d8d8;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.14);
+  cursor: pointer;
+  pointer-events: none;                       /* default — .show 일 때만 활성 (이전엔 항상 auto 였는데, 숨겨진 sub-ui 의 back 이 같은 위치에 깔린 visible sub-ui 의 이벤트를 가로채던 문제로 변경) */
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;                                 /* svg/qr-circle 위 */
+  transition: background 0.15s ease;
+}
+.hall-sub-ui.show .hall-sub-back { pointer-events: auto; }
+.hall-sub-back:hover    { background: #f5f5f5; }
+.hall-sub-back.dwelling { background: #e0e0e0; }
+.hall-sub-back::before {
+  content: '';
+  width: 38%;
+  height: 38%;
+  background: transparent;
+  border-left: 2px solid #1a1a1a;
+  border-bottom: 2px solid #1a1a1a;
+  transform: rotate(45deg) translate(15%, -15%);
+  border-bottom-left-radius: 2px;
+}
+
+/* QR 서브 UI — 흰 원 안에 QR + 라벨 */
+.hall-sub-qr-circle {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6%;
+  padding: 14% 10%;
+  box-sizing: border-box;
+  pointer-events: none;                       /* 백 버튼만 이벤트 받게 */
+}
+.hall-sub-qr-img {
+  width: 56%;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.hall-sub-qr-img img,
+.hall-sub-qr-img svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  image-rendering: pixelated;                 /* QR 픽셀 선명 */
+}
+.hall-sub-qr-label {
+  font-size: clamp(10px, 1.2vw, 16px);
+  color: #1a1a1a;
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+
+/* 캡처 시 반짝하는 흰 플래시 */
+.hall-flash {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 100;
+  transition: opacity 0.12s ease;
+}
+
+.hall-flash.show { opacity: 1; }
+
+/* ======================================================
+   HALL — RIGHT PANEL: artist note slide placeholder
+   ====================================================== */
+/* 우측 작가노트 placeholder — 1920×1200 (16:10) 비율, 컨테이너 안에서 수직 중앙 */
+.hall-slide-photo-placeholder {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  aspect-ratio: 1920 / 1200;
+  max-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: #ececec;
+  color: #777;
+  font-size: clamp(11px, 1.5vh, 14px);
+  font-weight: 600;
+  white-space: pre-line;
+  letter-spacing: 0.5px;
+  border-radius: 6px;
+  border: 1px dashed #b0b0b0;
+}
+
+/* Restore big number + divider for right-panel artist note slides */
+.hall-slide-num {
+  font-size: clamp(28px, 6vh, 56px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: #111;
+  margin-bottom: 6px;
+}
+
+.hall-slide-divider {
+  width: 32px;
+  height: 2px;
+  background: #111;
+  margin-bottom: 10px;
+}
+
+/* ===== Right Panel: Stacked Card Carousel ===== */
+.carousel-wrap {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  padding: 0;
+  cursor: ns-resize;
+}
+
+.carousel-track {
+  position: absolute;
+  left: 0; right: 0;
+  top: 0;
+  /* no gap — cards overlap via negative margin set in JS */
+}
+
+.mini-card {
+  position: relative;
+  flex-shrink: 0;
+  margin: 0 16px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+  /* negative margin for overlap */
+  margin-bottom: -40px;
+}
+
+.mini-card:hover {
+  border-color: var(--accent);
+  transform: scale(1.04);
+  box-shadow: 0 8px 32px var(--accent-glow);
+  z-index: 50 !important;
+}
+
+.mini-card img {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+  display: block;
+}
+
+.mini-card-body {
+  padding: 14px 18px;
+  background: linear-gradient(135deg, var(--panel-bg), var(--bg));
+}
+
+.mini-card-body h4 {
+  font-size: 0.95rem;
+  margin-bottom: 5px;
+  font-weight: 600;
+}
+
+.mini-card-body p {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+.carousel-hint {
+  position: absolute;
+  bottom: 12px;
+  left: 0; right: 0;
+  text-align: center;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  opacity: 0.4;
+  pointer-events: none;
+  z-index: 100;
+}
+
+/* ===== Scrollbar hide ===== */
+::-webkit-scrollbar { display: none; }

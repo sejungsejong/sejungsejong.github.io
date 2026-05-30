@@ -1,0 +1,13 @@
+# macOS
+.DS_Store
+
+# 캡처 런타임 출력 (server.py 가 만드는 세션 디렉토리)
+captured_image/
+
+# 에디터
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc

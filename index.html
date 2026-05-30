@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portfolio</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ===== Standby Screen (shown first; hover center-top to enter) ===== -->
+  <div class="standby" id="standby">
+    <section class="standby-panel standby-left"></section>
+    <section class="standby-panel standby-center-top">
+      <img id="standby-1" class="standby-1" src="" alt="">
+    </section>
+    <section class="standby-panel standby-right"></section>
+    <section class="standby-panel standby-center-bottom">
+      <!-- 2(rotating) + 3(fixed) overlap at center of bottom panel -->
+      <img id="standby-2" class="standby-2" src="" alt="">
+      <img id="standby-3" class="standby-3" src="" alt="">
+    </section>
+  </div>
+
+  <!-- ===== Landing Space (transient scene shown between standby & lobby) ===== -->
+  <div class="landing-space" id="landing-space">
+    <section class="ls-panel ls-left">
+      <img class="ls-wall" id="ls-wall-left" src="" alt="">
+    </section>
+    <section class="ls-panel ls-center-top">
+      <img class="ls-wall"  id="ls-wall-front" src="" alt="">
+      <img class="ls-front" id="ls-front"      src="" alt="">
+    </section>
+    <section class="ls-panel ls-right">
+      <img class="ls-wall" id="ls-wall-right" src="" alt="">
+    </section>
+    <section class="ls-panel ls-center-bottom">
+      <img class="ls-floor" id="ls-floor" src="" alt="">
+    </section>
+  </div>
+
+  <!-- ===== Exhibition Space (전시공간 — 4-panel split, items injected from config.js)
+       Starts hidden so it doesn't flash through during standby → landing-space fade. -->
+  <div class="landing hidden" id="landing">
+    <section class="landing-panel landing-left">
+      <img class="landing-wall" id="landing-wall-left" src="" alt="">
+      <div class="landing-items" id="landing-items-left"></div>
+    </section>
+    <section class="landing-panel landing-center-top">
+      <img class="landing-wall" id="landing-wall-center" src="" alt="">
+      <div class="landing-items" id="landing-items-center"></div>
+    </section>
+    <section class="landing-panel landing-right">
+      <img class="landing-wall" id="landing-wall-right" src="" alt="">
+      <div class="landing-items" id="landing-items-right"></div>
+    </section>
+    <section class="landing-panel landing-center-bottom">
+      <img class="landing-floor" id="landing-floor" src="" alt="">
+    </section>
+  </div>
+
+  <!-- ===== Hall Transition (해태 B관 진입 전 4 패널 mp4 동시 재생, hidden 기본) -->
+  <div class="hall-transition" id="hall-transition" aria-hidden="true">
+    <section class="ht-panel ht-left">
+      <video id="ht-left" muted playsinline preload="auto"></video>
+    </section>
+    <section class="ht-panel ht-center-top">
+      <!-- 정면 = BGM 포함 (muted 해제). user gesture 후 진입이라 자동재생 정책 통과 -->
+      <video id="ht-front" playsinline preload="auto"></video>
+    </section>
+    <section class="ht-panel ht-right">
+      <video id="ht-right" muted playsinline preload="auto"></video>
+    </section>
+    <section class="ht-panel ht-center-bottom">
+      <video id="ht-floor" muted playsinline preload="auto"></video>
+    </section>
+  </div>
+
+  <!-- ===== Hall View (작품관, hidden until enter from lobby) ===== -->
+  <div class="main-view" id="main-view">
+
+    <!-- 말풍선 — +버튼 클릭 시 위치/내용 채우고 .show 추가. main-view 위에 떠서
+         어느 패널의 핫스팟이든 위치 잡을 수 있음 -->
+    <div class="hall-bubble" id="hall-bubble">
+      <div class="hall-bubble-inner" id="hall-bubble-inner"></div>
+    </div>
+
+    <!-- 이미지 팝업 모달 (B관 밝은배경 카드 팝업 등) — 배경 dim + 가운데 contain.
+         어디 탭하면 dismiss. -->
+    <div class="hall-popup" id="hall-popup" aria-hidden="true">
+      <img class="hall-popup-img" id="hall-popup-img" src="" alt="">
+    </div>
+
+    <!-- 진입 사용방법 가이드 (4 panel 안내 + 50% dim 오버레이).
+         hall 진입 시 띄우고 어디든 탭하면 전체 dismiss. -->
+    <div class="hall-entry-guide" id="hall-entry-guide" aria-hidden="true">
+      <div class="heg-cell heg-left" data-region="left">
+        <div class="heg-alert" id="heg-alert-left"></div>
+      </div>
+      <div class="heg-cell heg-center-top" data-region="center-top">
+        <div class="heg-alert" id="heg-alert-center-top"></div>
+      </div>
+      <!-- 우 패널은 작가노트존(slides) + exit 버튼 두 영역 — 각각 별도 cell 이라 따로 dismiss -->
+      <div class="heg-right-wrap">
+        <div class="heg-cell heg-right-slides" data-region="right-slides">
+          <div class="heg-alert" id="heg-alert-right-slides"></div>
+        </div>
+        <div class="heg-cell heg-right-exit" data-region="right-exit">
+          <div class="heg-alert" id="heg-alert-right-exit"></div>
+        </div>
+      </div>
+      <div class="heg-cell heg-center-bottom"></div>
+    </div>
+
+    <!-- Left: 사진 슬라이더 (swipe 트리거) — 슬라이드가 패널 전체를 채우고,
+         진입 직후 안내 라벨이 가운데 떴다 페이드아웃 -->
+    <section class="panel panel-left" id="hall-left">
+      <div class="hall-left-slides" id="hall-left-slides">
+        <div class="hall-left-track" id="hall-left-track"></div>
+      </div>
+      <div class="hall-hint hall-hint-left" id="hall-hint-left"></div>
+    </section>
+
+    <!-- Center top: 3D viewer + GLB 핫존 + UI overlay(배경 호버) + 진입 hint -->
+    <section class="panel center-top" id="center-top">
+      <canvas id="three-canvas"></canvas>
+
+      <!-- GLB 회전 핫존 (캔버스 위 원형 영역) — 여기 안 클릭하면 GLB 회전,
+           이 영역 바깥 (= 중앙위 패널의 "배경") 클릭하면 UI 메뉴 spawn -->
+      <div class="hall-glb-zone" id="hall-glb-zone"></div>
+
+      <!-- 고정문구 — 토르소 아래 (캔버스 위 absolute) -->
+      <img class="glb-caption" id="glb-caption" src="assets/works/A/glb-ui/caption.png" alt="">
+
+      <!-- 새 image-based GLB UI — 4단 stage (main / bg / material / qr) -->
+      <div class="glb-ui" id="glb-ui">
+        <!-- Stage: 상시 (main) — 5 outer + center close. 좌표는 UI_상시.png 의 동그라미 픽셀 중심에서 측정 -->
+        <div class="glb-stage" data-stage="main">
+          <img class="glb-stage-bg" src="assets/works/A/glb-ui/ui-main.png" alt="">
+          <button class="glb-btn" data-action="material"   style="--x:50%;--y:15%" aria-label="작품 색상 선택"></button>
+          <button class="glb-btn" data-action="reset-all"  style="--x:85%;--y:42%" aria-label="초기화"></button>
+          <button class="glb-btn" data-action="download"   style="--x:72%;--y:85%" aria-label="이미지 다운로드"></button>
+          <button class="glb-btn" data-action="capture"    style="--x:30%;--y:85%" aria-label="캡처"></button>
+          <button class="glb-btn" data-action="background" style="--x:15%;--y:42%" aria-label="배경 색상 선택"></button>
+          <button class="glb-btn glb-btn-center" data-action="close" style="--x:50%;--y:54%" aria-label="UI 닫기"></button>
+        </div>
+        <!-- Stage: 배경 색상 — 좌표는 UI_배경컬러.png 측정값 -->
+        <div class="glb-stage" data-stage="bg">
+          <img class="glb-stage-bg" src="assets/works/A/glb-ui/ui-bg.png" alt="">
+          <button class="glb-btn glb-btn-back" data-action="back"    style="--x:7%;--y:8%" aria-label="뒤로"></button>
+          <button class="glb-color" data-bg="blue"   data-image="assets/works/A/bg/bg-blue.png"   style="--x:50%;--y:15%;--c:#1d3eaa" aria-label="파랑"></button>
+          <button class="glb-color" data-bg="purple" data-image="assets/works/A/bg/bg-purple.png" style="--x:85%;--y:42%;--c:#7a1f7a" aria-label="보라"></button>
+          <button class="glb-color" data-bg="red"    data-image="assets/works/A/bg/bg-red.png"    style="--x:72%;--y:85%;--c:#a31b1b" aria-label="빨강"></button>
+          <button class="glb-color" data-bg="teal"   data-image="assets/works/A/bg/bg-teal.png"   style="--x:30%;--y:85%;--c:#2c7d8a" aria-label="청록"></button>
+          <button class="glb-color" data-bg="black"  data-image="assets/works/A/bg/bg-black.png"  style="--x:15%;--y:42%;--c:#1a1a1a" aria-label="검정"></button>
+          <button class="glb-btn glb-btn-center" data-action="reset-bg" style="--x:50%;--y:53%" aria-label="초기화"></button>
+        </div>
+        <!-- Stage: 작품 색상 — 좌측 슬라이드 4 와 독립 (data-detail4 제거). 중앙 GLB 만 swap -->
+        <div class="glb-stage" data-stage="material">
+          <img class="glb-stage-bg" src="assets/works/A/glb-ui/ui-material.png" alt="">
+          <button class="glb-btn glb-btn-back" data-action="back"    style="--x:7%;--y:8%" aria-label="뒤로"></button>
+          <button class="glb-color" data-material="blue"   data-glb="assets/models/troso_blue.glb"   style="--x:50%;--y:15%;--c:#2154d8" aria-label="파랑"></button>
+          <button class="glb-color" data-material="yellow" data-glb="assets/models/troso_yellow.glb" style="--x:85%;--y:42%;--c:#ffc94a" aria-label="노랑"></button>
+          <button class="glb-color" data-material="red"    data-glb="assets/models/troso_red.glb"    style="--x:72%;--y:85%;--c:#c1141f" aria-label="빨강"></button>
+          <button class="glb-color" data-material="green"  data-glb="assets/models/troso_green.glb"  style="--x:30%;--y:85%;--c:#1e7a5a" aria-label="녹색"></button>
+          <button class="glb-color" data-material="white"  data-glb="assets/models/troso_white.glb"  style="--x:15%;--y:42%;--c:#e7e7e7" aria-label="흰색"></button>
+          <button class="glb-btn glb-btn-center" data-action="reset-material" style="--x:50%;--y:53%" aria-label="초기화"></button>
+        </div>
+        <!-- Stage: QR (캡처 결과 다운로드) -->
+        <div class="glb-stage" data-stage="qr">
+          <img class="glb-stage-bg" src="assets/works/A/glb-ui/ui-qr.png" alt="">
+          <img class="glb-qr-image" id="glb-qr-image" alt="">
+          <button class="glb-btn glb-btn-back" data-action="back" style="--x:7%;--y:8%" aria-label="뒤로"></button>
+        </div>
+      </div>
+
+      <!-- UI 메뉴 (인라인 SVG 휠 — 원래 5-wedge 디자인 복원)
+           click 기반: 호버해서 spawn → wedge 클릭 → 액션 / 중앙 X 클릭 → 닫기 -->
+      <svg class="hall-ui" id="hall-ui" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-label="작품 UI">
+        <defs>
+          <filter id="hall-ui-shadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="3" stdDeviation="5" flood-opacity="0.18"/>
+          </filter>
+        </defs>
+        <g filter="url(#hall-ui-shadow)">
+          <!-- 5개 wedge (각 72°, 시계 11/1/4/6/8시 중심) -->
+          <path class="hall-ui-wedge" data-action="capture"    aria-label="화면 캡처"  d="M100,100 L13.22,61.36 A95,95 0 0 1 109.93,5.52 Z"/>
+          <path class="hall-ui-wedge" data-action="reset"      aria-label="초기화"    d="M100,100 L109.93,5.52 A95,95 0 0 1 192.92,80.25 Z"/>
+          <path class="hall-ui-wedge" data-action="background" aria-label="배경 색상"  d="M100,100 L192.92,80.25 A95,95 0 0 1 147.5,182.27 Z"/>
+          <path class="hall-ui-wedge" data-action="material"   aria-label="작품 색상"  d="M100,100 L147.5,182.27 A95,95 0 0 1 36.43,170.59 Z"/>
+          <path class="hall-ui-wedge" data-action="download"   aria-label="다운로드"  d="M100,100 L36.43,170.59 A95,95 0 0 1 13.22,61.36 Z"/>
+          <!-- 가운데 흰 원 (close) -->
+          <circle class="hall-ui-close" data-action="close" aria-label="닫기" cx="100" cy="100" r="32"/>
+        </g>
+        <!-- 아이콘들 (시각용, pointer-events none) -->
+        <g class="hall-ui-icons" pointer-events="none" stroke="#1a1a1a" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <!-- 11시 카메라 -->
+          <g transform="translate(70 48)">
+            <path d="M -8 -3 L -4 -3 L -2.5 -5 L 2.5 -5 L 4 -3 L 8 -3 L 8 6 L -8 6 Z"/>
+            <circle cx="0" cy="2" r="3.5"/>
+          </g>
+          <!-- 1시 초기화 (원형 화살표) -->
+          <g transform="translate(141 54)">
+            <path d="M 5 -2 A 6 6 0 1 0 5 4"/>
+            <polyline points="2,-4 5,-2 6,-5"/>
+          </g>
+          <!-- 4시 배경색상 (color disc) -->
+          <g transform="translate(157 125)">
+            <circle cx="0" cy="0" r="7"/>
+            <path d="M -7 0 A 7 7 0 0 1 7 0 Z" fill="#1a1a1a" stroke="none"/>
+          </g>
+          <!-- 6시 작품색상 (palette dots) -->
+          <g transform="translate(100 160)" stroke="none" fill="#1a1a1a">
+            <circle cx="-6" cy="-2" r="2.2"/>
+            <circle cx="0"  cy="-5" r="2.2"/>
+            <circle cx="6"  cy="-2" r="2.2"/>
+            <circle cx="-3" cy="4"  r="2.2"/>
+            <circle cx="3"  cy="4"  r="2.2"/>
+          </g>
+          <!-- 8시 다운로드 -->
+          <g transform="translate(39 113)">
+            <path d="M 0 -6 L 0 3"/>
+            <polyline points="-3,0 0,3 3,0"/>
+            <path d="M -5 6 L 5 6"/>
+          </g>
+        </g>
+        <!-- 중앙 X (시각용) -->
+        <g pointer-events="none" stroke="#1a1a1a" stroke-width="1.6" stroke-linecap="round">
+          <line x1="92" y1="92" x2="108" y2="108"/>
+          <line x1="108" y1="92" x2="92" y2="108"/>
+        </g>
+      </svg>
+
+      <!-- ===== Sub-UIs (호버 액션으로 등장; 메인 UI 아래에 같은 크기 원으로) =====
+           각 wedge: 색상 적용 / 중앙 원: 해당 속성 초기화 / 좌상단 ←: 메인으로 복귀
+           pointer-events 는 .show 시에만 활성화 -->
+
+      <!-- 배경색상 서브 UI -->
+      <div class="hall-sub-ui" id="hall-sub-bg" data-sub="bg">
+        <button class="hall-sub-back" data-action="back" aria-label="뒤로"></button>
+        <svg class="hall-sub-wheel" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-label="배경 색상 선택">
+          <defs>
+            <filter id="hall-sub-bg-shadow" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="3" stdDeviation="5" flood-opacity="0.18"/>
+            </filter>
+          </defs>
+          <g filter="url(#hall-sub-bg-shadow)">
+            <path class="hall-sub-wedge" data-color="#DCDCDC" fill="#DCDCDC" aria-label="회색"  d="M100,100 L13.22,61.36 A95,95 0 0 1 109.93,5.52 Z"/>
+            <path class="hall-sub-wedge" data-color="#F5A8A8" fill="#F5A8A8" aria-label="빨강"  d="M100,100 L109.93,5.52 A95,95 0 0 1 192.92,80.25 Z"/>
+            <path class="hall-sub-wedge" data-color="#7DA3DD" fill="#7DA3DD" aria-label="파랑"  d="M100,100 L192.92,80.25 A95,95 0 0 1 147.5,182.27 Z"/>
+            <path class="hall-sub-wedge" data-color="#A6CCB3" fill="#A6CCB3" aria-label="녹색"  d="M100,100 L147.5,182.27 A95,95 0 0 1 36.43,170.59 Z"/>
+            <path class="hall-sub-wedge" data-color="#3F3F3F" fill="#3F3F3F" aria-label="검정"  d="M100,100 L36.43,170.59 A95,95 0 0 1 13.22,61.36 Z"/>
+            <circle class="hall-sub-reset" data-action="reset-bg" aria-label="기본 색상" cx="100" cy="100" r="32"/>
+          </g>
+          <!-- 중앙 새로고침 아이콘 -->
+          <g pointer-events="none" stroke="#1a1a1a" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M 108 96 A 8 8 0 1 0 108 104"/>
+            <polyline points="105,93 108,96 111,93"/>
+          </g>
+        </svg>
+      </div>
+
+      <!-- 재질색상 (GLB swap — 5종 색상 GLB 중 선택) 서브 UI
+           각 wedge data-glb = 호버 dwell 시 swap 할 GLB 경로. 회전 각도는 swap 시 그대로 유지 -->
+      <div class="hall-sub-ui" id="hall-sub-material" data-sub="material">
+        <button class="hall-sub-back" data-action="back" aria-label="뒤로"></button>
+        <svg class="hall-sub-wheel" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-label="작품 색상 선택">
+          <defs>
+            <filter id="hall-sub-mt-shadow" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="3" stdDeviation="5" flood-opacity="0.18"/>
+            </filter>
+          </defs>
+          <g filter="url(#hall-sub-mt-shadow)">
+            <path class="hall-sub-wedge" data-color="#F0F0F0" data-glb="assets/models/troso_white.glb"  data-detail4="assets/works/A/note/slide-4-base.png"    fill="#F0F0F0" aria-label="흰색" d="M100,100 L13.22,61.36 A95,95 0 0 1 109.93,5.52 Z"/>
+            <path class="hall-sub-wedge" data-color="#F5A8A8" data-glb="assets/models/troso_red.glb"    data-detail4="assets/works/A/note/slide-4-color-1.png" fill="#F5A8A8" aria-label="빨강" d="M100,100 L109.93,5.52 A95,95 0 0 1 192.92,80.25 Z"/>
+            <path class="hall-sub-wedge" data-color="#7DA3DD" data-glb="assets/models/troso_blue.glb"   data-detail4="assets/works/A/note/slide-4-color-2.png" fill="#7DA3DD" aria-label="파랑" d="M100,100 L192.92,80.25 A95,95 0 0 1 147.5,182.27 Z"/>
+            <path class="hall-sub-wedge" data-color="#A6CCB3" data-glb="assets/models/troso_green.glb"  data-detail4="assets/works/A/note/slide-4-color-3.png" fill="#A6CCB3" aria-label="녹색" d="M100,100 L147.5,182.27 A95,95 0 0 1 36.43,170.59 Z"/>
+            <path class="hall-sub-wedge" data-color="#F5DD90" data-glb="assets/models/troso_yellow.glb" data-detail4="assets/works/A/note/slide-4-color-4.png" fill="#F5DD90" aria-label="노랑" d="M100,100 L36.43,170.59 A95,95 0 0 1 13.22,61.36 Z"/>
+            <circle class="hall-sub-reset" data-action="reset-material" aria-label="기본 색상" cx="100" cy="100" r="32"/>
+          </g>
+          <g pointer-events="none" stroke="#1a1a1a" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M 108 96 A 8 8 0 1 0 108 104"/>
+            <polyline points="105,93 108,96 111,93"/>
+          </g>
+        </svg>
+      </div>
+
+      <!-- QR 다운로드 서브 UI -->
+      <div class="hall-sub-ui hall-sub-qr" id="hall-sub-qr" data-sub="qr">
+        <button class="hall-sub-back" data-action="back" aria-label="뒤로"></button>
+        <div class="hall-sub-qr-circle">
+          <div class="hall-sub-qr-img" id="hall-sub-qr-img"></div>
+          <div class="hall-sub-qr-label">캡처한 이미지 다운로드</div>
+        </div>
+      </div>
+
+      <!-- 진입 직후 떴다가 페이드아웃되는 안내 (작품을 터치해보세요) — 좌측 hint 와 동일 스펙 -->
+      <div class="hall-hint hall-hint-center" id="hall-hint-center"></div>
+
+      <!-- 캡처 시 화면이 잠깐 반짝하는 오버레이 -->
+      <div class="hall-flash" id="hall-flash"></div>
+    </section>
+
+    <!-- Right: 5:2 split. 좌(5) = 슬라이드 영역 (A관은 bg/header 포함 작가노트, B관은 단순 슬라이드)
+              우(2) = toggle (A관/B관 모두 exit/로비나가기). -->
+    <section class="panel panel-right hall-right" id="hall-right">
+      <!-- A관 작가노트존 배경 — 패널 전체에 깔리고 슬라이드/exit 둘 다 위에 얹힘 -->
+      <img class="hall-right-bg" id="hall-right-bg" src="" alt="">
+      <div class="hall-right-slides" id="hall-right-slides">
+        <img class="hall-right-header" id="hall-right-header" src="" alt="">
+        <div class="hall-slide-track" id="hall-slide-track"></div>
+      </div>
+      <div class="hall-right-toggle" id="hall-right-toggle">
+        <img class="hall-toggle-img" id="hall-toggle-img" src="" alt="">
+        <div class="hall-toggle-overlay">
+          <span class="hall-toggle-label" id="hall-toggle-label"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Center bottom: hall floor image -->
+    <section class="panel center-bottom" id="center-bottom">
+      <img id="center-bottom-img" src="" alt="" class="center-bottom-image">
+    </section>
+
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/"
+    }
+  }
+  </script>
+  <!-- 화면 캡처용 (UI 11시 버튼) -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <!-- QR 코드 생성 (UI 8시 버튼) — pure JS, 외부 호출 X -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
