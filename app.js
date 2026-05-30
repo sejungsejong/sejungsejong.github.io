@@ -1655,7 +1655,8 @@ function handleHallUIAction(action) {
       captureHallScreen();
       break;
     case 'download':
-      captureAndShowQR();   // 내부에서 환경 보고 stage 띄울지 / 다운로드만 할지 결정
+      captureAndShowQR();   // 캡처 → 백엔드 있으면 path 받아 처리, 없으면 클라 다운로드
+      showStage('qr');      // UI_QR.png 자산 표시 (시각 피드백)
       break;
     case 'reset-bg':
       _uiState.selectedBg = null;

@@ -1552,30 +1552,13 @@ body {
   transform: translate(-50%, -50%) rotate(-45deg);
   pointer-events: none;
 }
-/* QR stage 는 UI_QR.png 의 이미 그려진 QR(큰) 과 생성 QR 이 겹침 → stage-bg 제외, 흰 원 + 생성 QR + 뒤로 버튼 */
-.glb-stage[data-stage="qr"] .glb-stage-bg { display: none; }
-.glb-stage[data-stage="qr"] {
-  background: #fff;
-  border-radius: 50%;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
-}
-/* 뒤로 버튼 — 흰 원 좌상단에 작은 회색 동그라미로 표시 (QR stage 에서 시각화) */
+/* QR stage = UI_QR.png 자산 자체가 QR 모양 + 뒤로 버튼 포함. 그대로 표시, 추가 생성 QR 안 띄움. */
+.glb-qr-image { display: none; }
 .glb-stage[data-stage="qr"] .glb-btn-back {
-  background: rgba(255, 255, 255, 0.9);
-  border: 1.5px solid #999;
+  /* UI_QR.png 좌상단 작은 동그라미 위에 클릭존만 — 시각 표시 X */
   width: 16%;
   height: 16%;
   z-index: 2;
-}
-.glb-stage[data-stage="qr"] .glb-btn-back::before {
-  content: '←';
-  position: absolute;
-  left: 50%;
-  top:  50%;
-  transform: translate(-50%, -50%);
-  font-size: 1.1em;
-  color: #444;
-  font-weight: 700;
 }
 .glb-qr-image {
   position: absolute;
