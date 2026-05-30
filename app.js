@@ -259,8 +259,9 @@ function showLandingSpace() {
     setTimeout(() => {
       ls.classList.remove('visible');
       setTimeout(() => { ls.style.display = 'none'; }, 700);
-      // 로비 노출되는 시점에 B 전환 비디오 백그라운드 preload — 사용자가 해태 누르기 전에 캐시 채움
+      // 로비 노출되는 시점에 hall 자산 백그라운드 prefetch — 사용자가 진입하기 전 캐시 채움
       preloadHallTransitionVideos();
+      preloadHallAAssets();
     }, wait);
   });
 }
@@ -637,7 +638,47 @@ function preloadHallTransitionVideos() {
   ['left', 'front', 'right', 'floor'].forEach((k) => {
     const url = B.transition[k];
     if (!url) return;
-    // fetch 로 실제 다운로드 시작 → 브라우저 캐시에 저장. <video src> 가 같은 URL 쓰면 cache hit.
+    fetch(url, { mode: 'cors', credentials: 'omit' }).catch(() => {});
+  });
+}
+
+// A관 핵심 자산 미리 fetch — lobby 도착 시 백그라운드로 다운로드 → A 진입 시점 캐시 hit.
+//  - 좌 슬라이드 1~4 + slide-4 color variants 1~4
+//  - 우 작가노트 슬라이드 + bg + header
+//  - centerTop bg (5종 색상)
+//  - GLB (white 기본 + color 4종) — 매우 큼, 백그라운드로 천천히
+let _aAssetsPreloaded = false;
+function preloadHallAAssets() {
+  if (_aAssetsPreloaded) return;
+  _aAssetsPreloaded = true;
+  const A = config.halls && config.halls.A;
+  if (!A) return;
+  const urls = [];
+  // 좌 슬라이드
+  (A.left && A.left.slides || []).forEach((s) => { if (s.image) urls.push(s.image); });
+  // 좌 slide-4 color variants
+  ['1','2','3','4'].forEach((n) => urls.push(assetUrl(`assets/works/A/note/slide-4-color-${n}.png`)));
+  // 우 작가노트 슬라이드 + bg + header
+  if (A.right) {
+    if (A.right.bg) urls.push(A.right.bg);
+    if (A.right.header) urls.push(A.right.header);
+    const items = A.right.slides && A.right.slides.items;
+    if (Array.isArray(items)) items.forEach((it) => { if (it && it.image) urls.push(it.image); });
+  }
+  // centerBottom (바닥)
+  if (A.centerBottom && A.centerBottom.image) urls.push(A.centerBottom.image);
+  // bg colors (5종)
+  ['black','blue','red','teal','purple'].forEach((c) => urls.push(assetUrl(`assets/works/A/bg/bg-${c}.png`)));
+  // GLB (큼) — 백그라운드 다운로드
+  ['white','red','blue','green','yellow'].forEach((c) => urls.push(assetUrl(`assets/models/troso_${c}.glb`)));
+  // 이머시브 4 panel
+  if (A.immersive) {
+    ['left','centerTop','centerBottom','right'].forEach((k) => {
+      const o = A.immersive[k];
+      if (o && o.image) urls.push(o.image);
+    });
+  }
+  urls.filter(Boolean).forEach((url) => {
     fetch(url, { mode: 'cors', credentials: 'omit' }).catch(() => {});
   });
 }
