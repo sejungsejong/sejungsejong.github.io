@@ -610,11 +610,19 @@ function playHallTransition(t, hall, onDone) {
   };
   Promise.all([videoEndedP, hallPreloadP]).then(finish);
 
-  // 같은 microtask 에서 4 play() 동시 호출. 사전 preload (preloadHallTransitionVideos)
-  //  로 비디오 거의 캐시 상태 → buffer 차이로 인한 시작 시점 jitter 최소화.
-  vids.forEach((v) => {
+  // 4 비디오 모두 첫 frame 디코딩 완료될 때까지 visibility:hidden → 그 뒤 동시 show.
+  //  play() Promise 해결 시점 + rAF 한 프레임 후가 첫 frame 페인트된 시점.
+  vids.forEach((v) => { v.style.visibility = 'hidden'; });
+  const playPromises = vids.map((v) => {
     const p = v.play();
     if (p && p.catch) p.catch((err) => console.warn('[transition] play failed:', err));
+    return p && p.then ? p.catch(() => {}) : Promise.resolve();
+  });
+  Promise.all(playPromises).then(() => {
+    // 첫 frame 페인트 보장 — 추가 rAF 2번 후 visibility 복구 (4 video 한 frame 에 동시 노출)
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      vids.forEach((v) => { v.style.visibility = ''; });
+    }));
   });
 }
 
