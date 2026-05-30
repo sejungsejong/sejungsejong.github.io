@@ -1891,17 +1891,25 @@ function applyMaterialColor(hex) {
 //   - 그 URL 을 QR 로 만들어 서브 UI 에 표시
 // ============================================================
 async function captureAndShowQR() {
-  // 캡처 → URL 생성 → glb-ui QR stage 의 중앙 이미지 영역에 QR 표시
-  const path = await captureHallScreen({ flash: false });
-  if (!path) return;
+  // 캡처 → 결과에 따라 QR or 다운로드 처리
+  const result = await captureHallScreen({ flash: false });
+  if (!result) return;
 
+  // 클라 다운로드 폴백 — QR 만들 URL 이 없으니 그냥 다운로드만 트리거하고 끝 (UI 도 안 띄움)
+  if (result && typeof result === 'object' && result.download) {
+    console.log('[hall-ui] static host — image downloaded directly');
+    return;
+  }
+
+  // 서버 백엔드 있을 때 — path 받아서 QR URL 만들고 QR stage 노출
+  const path = typeof result === 'string' ? result : null;
+  if (!path) return;
   const url = `${window.location.origin}/${path.replace(/^\/+/, '')}`;
   const imgEl = document.getElementById('glb-qr-image');
   if (imgEl && window.qrcode) {
     const qr = window.qrcode(0, 'L');
     qr.addData(url);
     qr.make();
-    // data URL 로 변환해 <img> src 에 주입 (이미지 위 정렬)
     const svgTag = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
     const blob = new Blob([svgTag], { type: 'image/svg+xml' });
     imgEl.src = URL.createObjectURL(blob);
@@ -1921,29 +1929,42 @@ async function captureHallScreen({ flash: doFlash = true } = {}) {
     setTimeout(() => flash.classList.remove('show'), 180);
   }
   try {
-    // 캡처 직전 GLB 강제 렌더 — 현재 회전 그대로 캔버스 버퍼에 들어가게
     if (window._forceRenderGLB) window._forceRenderGLB();
-
-    // GLB 가 렌더되는 WebGL 캔버스 자체를 직접 toDataURL → GLB 영역만 캡처
     const glbCanvas = document.getElementById('three-canvas');
-    if (!glbCanvas) {
-      console.warn('three-canvas not found');
-      return null;
-    }
+    if (!glbCanvas) { console.warn('three-canvas not found'); return null; }
     const dataUrl = glbCanvas.toDataURL('image/png');
 
-    const res = await fetch('/capture', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: dataUrl }),
-    });
-    const json = await res.json().catch(() => ({}));
-    console.log('[hall-ui] captured →', json.path || json);
-    return json.path || null;
+    // 로컬 dev (server.py) 면 /capture POST 시도 → path 반환. 정적 호스팅 (github.io 등) 은 실패 시 클라 다운로드 폴백.
+    const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.hostname === '';
+    if (isLocal) {
+      try {
+        const res = await fetch('/capture', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: dataUrl }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (json.path) return json.path;
+      } catch (e) { /* fallback below */ }
+    }
+    // 폴백 — 브라우저 다운로드 트리거. dataUrl 자체를 반환해 QR 처리 분기에서 download 모드로.
+    triggerBrowserDownload(dataUrl, `capture-${Date.now()}.png`);
+    return { download: true };
   } catch (err) {
     console.error('[hall-ui] capture failed:', err);
     return null;
   }
+}
+
+// 브라우저 다운로드 트리거 — <a download> 클릭 시뮬레이션
+function triggerBrowserDownload(href, filename) {
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = filename;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => a.remove(), 100);
 }
 
 // 외부 (enterHall) 에서 좌·우 슬라이더 초기 위치 리셋용
