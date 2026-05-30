@@ -259,6 +259,8 @@ function showLandingSpace() {
     setTimeout(() => {
       ls.classList.remove('visible');
       setTimeout(() => { ls.style.display = 'none'; }, 700);
+      // 로비 노출되는 시점에 B 전환 비디오 백그라운드 preload — 사용자가 해태 누르기 전에 캐시 채움
+      preloadHallTransitionVideos();
     }, wait);
   });
 }
@@ -608,22 +610,27 @@ function playHallTransition(t, hall, onDone) {
   };
   Promise.all([videoEndedP, hallPreloadP]).then(finish);
 
-  // 4 비디오 모두 canplay (HAVE_FUTURE_DATA, readyState >= 3) 까진 기다린 뒤 동시 play.
-  //  버퍼 상태 달라서 한 비디오만 늦게 시작되어 보이는 현상 차단. canplay 면 즉시 시작 가능,
-  //  나머지는 백그라운드 버퍼링 — canplaythrough(전부 다운로드) 까진 기다리지 않음.
-  const readyP = vids.map((v) => new Promise((resolve) => {
-    if (v.readyState >= 3) return resolve();
-    const onReady = () => { v.removeEventListener('canplay', onReady); resolve(); };
-    v.addEventListener('canplay', onReady);
-    setTimeout(resolve, 3000);     // 안전장치 — 3s 후 강제 진행
-  }));
-  Promise.all(readyP).then(() => {
-    vids.forEach((v) => { try { v.currentTime = 0; } catch {} });
-    // 같은 microtask 에서 4 play() 호출 → 브라우저 같은 frame 에 시작 시도
-    vids.forEach((v) => {
-      const p = v.play();
-      if (p && p.catch) p.catch((err) => console.warn('[transition] play failed:', err));
-    });
+  // 같은 microtask 에서 4 play() 동시 호출. 사전 preload (preloadHallTransitionVideos)
+  //  로 비디오 거의 캐시 상태 → buffer 차이로 인한 시작 시점 jitter 최소화.
+  vids.forEach((v) => {
+    const p = v.play();
+    if (p && p.catch) p.catch((err) => console.warn('[transition] play failed:', err));
+  });
+}
+
+// B 전환 mp4 4개 미리 fetch — 사용자가 lobby 머무는 동안 백그라운드로 캐시.
+//  클릭 시점엔 canplay 즉시, 4 panel 시작 시점 차이 최소화.
+let _bTransitionPreloaded = false;
+function preloadHallTransitionVideos() {
+  if (_bTransitionPreloaded) return;
+  _bTransitionPreloaded = true;
+  const B = config.halls && config.halls.B;
+  if (!B || !B.transition) return;
+  ['left', 'front', 'right', 'floor'].forEach((k) => {
+    const url = B.transition[k];
+    if (!url) return;
+    // fetch 로 실제 다운로드 시작 → 브라우저 캐시에 저장. <video src> 가 같은 URL 쓰면 cache hit.
+    fetch(url, { mode: 'cors', credentials: 'omit' }).catch(() => {});
   });
 }
 
