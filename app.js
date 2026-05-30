@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { config } from './config.js';
 import { assetUrl, rewriteAssetsDeep, rewriteAssetsInDOM } from './asset-url.js';
@@ -2453,6 +2454,10 @@ function init3DViewer() {
   //  swap 시 항상 이전 자식을 target.remove 하고 새 scene 을 add 하므로 한 번에 한 군데에만 붙음.
   const glbCache = new Map();
   const glbLoader = new GLTFLoader();
+  // Draco 압축된 GLB 디코드 — decoder wasm 은 jsDelivr CDN 에서 로드 (CORS OK)
+  const dracoLoader = new DRACOLoader();
+  dracoLoader.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/');
+  glbLoader.setDRACOLoader(dracoLoader);
 
   // target.rotation 은 그대로 두고 자식만 swap → 회전 각도 자연스럽게 이어짐
   function applyGlbScene(scene) {

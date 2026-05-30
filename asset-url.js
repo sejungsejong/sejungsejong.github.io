@@ -42,12 +42,7 @@ export const RELEASE_ASSETS = new Set([
   'assets/lobby/work-inactive-5.png',
   'assets/lobby/work-inactive-6.png',
   'assets/lobby/work-inactive-7.png',
-  'assets/models/DamagedHelmet.glb',
-  'assets/models/troso_blue.glb',
-  'assets/models/troso_green.glb',
-  'assets/models/troso_red.glb',
-  'assets/models/troso_white.glb',
-  'assets/models/troso_yellow.glb',
+  // GLB 는 Draco 압축으로 40~50MB → repo 에 직접 commit (CORS 위해)
   'assets/works/A/bg/bg-black.png',
   'assets/works/A/bg/bg-blue.png',
   'assets/works/A/bg/bg-purple.png',
