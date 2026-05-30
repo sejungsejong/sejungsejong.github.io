@@ -1655,8 +1655,7 @@ function handleHallUIAction(action) {
       captureHallScreen();
       break;
     case 'download':
-      captureAndShowQR();
-      showStage('qr');
+      captureAndShowQR();   // 내부에서 환경 보고 stage 띄울지 / 다운로드만 할지 결정
       break;
     case 'reset-bg':
       _uiState.selectedBg = null;
