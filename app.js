@@ -2038,17 +2038,30 @@ function initHallBubble() {
 // 이미지 팝업 모달 — hostEl(panel) 의 자식으로 옮겨 panel 안에만 표시.
 //  opts.clickX/Y 가 있으면 클릭 좌표 근처에 배치 + panel 안으로 boundary 클램프.
 //  없으면 panel 가운데 (B관 light phase 등).
+let _popupVersion = 0;
 function showHallPopup(src, hostEl, opts) {
   const popup = document.getElementById('hall-popup');
   const img   = document.getElementById('hall-popup-img');
   if (!popup || !img) return;
-  img.src = src;
+
+  // 새 호출 마다 버전 증가 → 이전 비동기 onload 콜백이 깜빡 표시되는 race 차단
+  const myVersion = ++_popupVersion;
+
+  // 이전 호출의 잔존 위치/사이즈 / src 모두 즉시 초기화
+  img.onload = null;
+  img.style.visibility = 'hidden';   // 새 위치 계산 끝나기 전까지 안 보이게
+  img.style.position = '';
+  img.style.left = '';
+  img.style.top  = '';
+  img.style.maxWidth = '';
+  img.style.maxHeight = '';
+
   if (hostEl && popup.parentElement !== hostEl) hostEl.appendChild(popup);
-  // 클릭 좌표 모드 — popup 자체는 dim 없이 이미지만 클릭 근처에. dim 끔.
+
   if (opts && opts.clickX != null && opts.clickY != null && hostEl) {
     popup.classList.add('no-dim');
-    // 이미지 로드 끝나야 사이즈 측정 가능 — onload 시 위치 보정
     const place = () => {
+      if (myVersion !== _popupVersion) return;   // 이전 호출 응답 무시
       const pr = hostEl.getBoundingClientRect();
       const cx = opts.clickX - pr.left;
       const cy = opts.clickY - pr.top;
@@ -2058,8 +2071,6 @@ function showHallPopup(src, hostEl, opts) {
       img.style.maxHeight = maxH + 'px';
       const iw = img.offsetWidth  || maxW;
       const ih = img.offsetHeight || maxH;
-      // 기본: + 우측에 딱 붙여 표시. opts.side === 'left' 면 강제 좌측.
-      //  오버플로 시 반대로 flip 하지 않음 → 패널 경계에 clamp (+ 가까이 유지)
       const wantLeft = opts.side === 'left';
       let left = wantLeft ? cx - iw - 18 : cx + 18;
       let top  = cy - ih / 2;
@@ -2070,16 +2081,18 @@ function showHallPopup(src, hostEl, opts) {
       img.style.position = 'absolute';
       img.style.left = left + 'px';
       img.style.top  = top  + 'px';
+      img.style.visibility = '';   // 위치 잡힌 뒤에 노출
     };
-    if (img.complete) place();
-    else img.onload = place;
+    img.onload = () => { if (myVersion === _popupVersion) place(); };
+    img.src = src;
+    // src 가 캐시 hit 면 onload 안 뜨고 complete=true — 한 프레임 뒤 force place
+    requestAnimationFrame(() => {
+      if (myVersion === _popupVersion && img.complete && img.naturalWidth > 0) place();
+    });
   } else {
     popup.classList.remove('no-dim');
-    img.style.position = '';
-    img.style.left = '';
-    img.style.top  = '';
-    img.style.maxWidth = '';
-    img.style.maxHeight = '';
+    img.style.visibility = '';
+    img.src = src;
   }
   popup.classList.add('show');
   popup.setAttribute('aria-hidden', 'false');
