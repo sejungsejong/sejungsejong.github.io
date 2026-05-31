@@ -1092,12 +1092,12 @@ body {
    기본 숨김. slide-4 의 + 클릭 → .show 추가 → 등장. 동그라미 active 시 흰색 체크 표시. */
 .color-variation {
   position: absolute;
-  left: 4%;
+  right: 4%;        /* 좌측 → 우측 (사용자 요청) */
   bottom: 5%;
-  width: 34%;
-  padding: 10px 14px;
+  width: 24%;       /* 34% → 24% (더 작게) */
+  padding: 8px 11px;
   background: #fff;
-  border-radius: 14px;
+  border-radius: 12px;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
   z-index: 4;
   pointer-events: auto;
@@ -1476,7 +1476,7 @@ body {
 }
 .glb-ui {
   position: absolute;
-  width: clamp(160px, 17%, 260px);
+  width: clamp(120px, 13%, 200px);   /* 전반 UI 축소 */
   aspect-ratio: 1 / 1;
   z-index: 16;
   transform: translate(-50%, -50%);

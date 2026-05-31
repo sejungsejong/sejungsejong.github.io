@@ -159,18 +159,18 @@ export const config = {
       left: {
         slides: [
           { image: 'assets/works/A/note/slide-1.png', popups: [
-            { x: '33%', y: '21%', popupImage: 'assets/works/A/note/popup/popup-1-1.png' },
+            { x: '33%', y: '21%', popupImage: 'assets/works/A/note/popup/popup-1-1.png', popupSide: 'left' },   // 좌측 + → popup 좌측
             { x: '67%', y: '58%', popupImage: 'assets/works/A/note/popup/popup-1-2.png' },
           ]},
           { image: 'assets/works/A/note/slide-2.png', popups: [
-            { x: '33%', y: '72%', popupImage: 'assets/works/A/note/popup/popup-2-1.png' },
+            { x: '33%', y: '72%', popupImage: 'assets/works/A/note/popup/popup-2-1.png', popupSide: 'left' },   // 좌측 + → popup 좌측
           ]},
           { image: 'assets/works/A/note/slide-3.png', popups: [
             { x: '65%', y: '47%', popupImage: 'assets/works/A/note/popup/popup-3-1.png' },
             { x: '40%', y: '70%', popupImage: 'assets/works/A/note/popup/popup-3-2.png' },
           ]},
           { image: 'assets/works/A/note/slide-4-base.png', popups: [
-            { x: '67%', y: '35%', colorVariation: true },   // + 클릭 → HTML color variation 카드 toggle
+            { x: '67%', y: '35%', colorVariation: true },
           ]},
         ],
       },
@@ -227,14 +227,14 @@ export const config = {
           toggle: { label: '로비로 나가기' },
         },
         hotspots: [
-          // 좌 패널: popup-1(좌), popup-3(우) — 흰 원 detection 으로 측정
-          { panel: 'left',      x: '19%', y: '23%', popupImage: 'assets/works/A/immersive/popup/popup-1.png', invisible: true },
+          // 좌 패널: popup-1(좌 — 여성 몸체 옆) → popup 하단(몸 쪽). popup-3(우)
+          { panel: 'left',      x: '19%', y: '23%', popupImage: 'assets/works/A/immersive/popup/popup-1.png', invisible: true, popupSide: 'bottom' },
           { panel: 'left',      x: '55%', y: '47%', popupImage: 'assets/works/A/immersive/popup/popup-3.png', invisible: true },
-          // 중앙 패널: popup-2(좌측 중앙), popup-4(우상)
-          { panel: 'centerTop', x: '37%', y: '48%', popupImage: 'assets/works/A/immersive/popup/popup-2.png', invisible: true },
+          // 중앙 패널: popup-2(좌측 중앙/하단) → 좌측, popup-4(우상) → 기본 우측
+          { panel: 'centerTop', x: '37%', y: '48%', popupImage: 'assets/works/A/immersive/popup/popup-2.png', invisible: true, popupSide: 'left' },
           { panel: 'centerTop', x: '57%', y: '24%', popupImage: 'assets/works/A/immersive/popup/popup-4.png', invisible: true },
-          // 우 패널: popup-5
-          { panel: 'right',     x: '42%', y: '33%', popupImage: 'assets/works/A/immersive/popup/popup-5.png', invisible: true },
+          // 우 패널: popup-5 → 좌측
+          { panel: 'right',     x: '42%', y: '33%', popupImage: 'assets/works/A/immersive/popup/popup-5.png', invisible: true, popupSide: 'left' },
         ],
       },
     },

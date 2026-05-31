@@ -21,6 +21,10 @@ const BGM_ASSETS = {
   'b-dark':       'assets/bgm/b-dark.mp3',
   'b-light':      'assets/bgm/b-light.mp3',
 };
+// 트랙별 볼륨 (기본 BGM.vol = 0.5 와 곱셈). 사용자 요청: b-dark 좀 더 크게.
+const BGM_VOL_BY_KEY = {
+  'b-dark': 1.6,    // 0.5 * 1.6 = 0.8
+};
 const SFX_ASSETS = {
   'portal': 'assets/bgm/portal.mp3',
   'click':  'assets/bgm/click.wav',
@@ -55,7 +59,9 @@ const BGM = {
     console.log('[BGM] play', key);
     this.current = audio;
     this.currentKey = key;
-    this._fade(audio, 0, this.vol);
+    // 트랙별 볼륨 가중치 적용 (0.5 × multiplier, 1.0 clamp)
+    const targetVol = Math.min(1.0, this.vol * (BGM_VOL_BY_KEY[key] || 1));
+    this._fade(audio, 0, targetVol);
   },
   stop() {
     if (!this.current) return;
@@ -764,9 +770,9 @@ function enterImmersiveA() {
   const glbUi = document.getElementById('glb-ui');
   if (glbUi) glbUi.style.display = 'none';
 
-  // 검정 오버레이로 swap 순간 가림 — 흰 panel-bg 깜빡임 + 패널별 시차 노출 차단
+  // PPT 풍 dissolve — 검정 페이드 (0.5s in / 0.5s out) 로 부드럽게 전환
   const cover = document.createElement('div');
-  cover.style.cssText = 'position:fixed;inset:0;background:#000;z-index:9999;opacity:0;transition:opacity 0.18s ease;pointer-events:none';
+  cover.style.cssText = 'position:fixed;inset:0;background:#000;z-index:9999;opacity:0;transition:opacity 0.5s ease;pointer-events:none';
   document.body.appendChild(cover);
   requestAnimationFrame(() => { cover.style.opacity = '1'; });
 
@@ -784,15 +790,15 @@ function enterImmersiveA() {
     return i.decode ? i.decode().catch(() => {}) : new Promise((r) => { i.onload = r; i.onerror = r; });
   });
 
-  // 검정 fade-in 끝난 뒤(180ms) + decode 끝난 뒤 swap → 한 프레임 후 검정 fade-out
-  Promise.all([Promise.all(decodes), new Promise((r) => setTimeout(r, 180))]).then(() => {
+  // 검정 fade-in 0.5s 끝나면 + decode 끝나면 swap → 검정 fade-out 0.5s → 제거
+  Promise.all([Promise.all(decodes), new Promise((r) => setTimeout(r, 500))]).then(() => {
     requestAnimationFrame(() => {
       applyHallConfig(im);
       const panel = document.getElementById('center-top');
       if (panel) panel.style.backgroundImage = '';
       requestAnimationFrame(() => {
         cover.style.opacity = '0';
-        setTimeout(() => cover.remove(), 250);
+        setTimeout(() => cover.remove(), 600);
       });
     });
   });
@@ -986,16 +992,21 @@ function activateBLightPhase() {
   const lp = hall && hall.lightPhase;
   if (!lp) return;
   _bPhase = 'light';
-  BGM.play('b-light');   // dark → light BGM 전환 (cross-fade)
+  BGM.play('b-light');
 
-  // 4 자산 모두 decode 끝나야 swap — 한 프레임에 한 번에 전환 (panel 하나씩 깜빡임 방지)
+  // PPT dissolve — 검정 cover 페이드 인/아웃 0.5s 씩
+  const cover = document.createElement('div');
+  cover.style.cssText = 'position:fixed;inset:0;background:#000;z-index:9999;opacity:0;transition:opacity 0.5s ease;pointer-events:none';
+  document.body.appendChild(cover);
+  requestAnimationFrame(() => { cover.style.opacity = '1'; });
+
   const srcs = [lp.left, lp.front, lp.right, lp.floor].filter(Boolean);
   const decodes = srcs.map((src) => {
     const im = new Image();
     im.src = src;
     return im.decode ? im.decode().catch(() => {}) : new Promise((r) => { im.onload = r; im.onerror = r; });
   });
-  Promise.all(decodes).then(() => {
+  Promise.all([Promise.all(decodes), new Promise((r) => setTimeout(r, 500))]).then(() => {
     requestAnimationFrame(() => {
       if (lp.left)  buildHallStaticPanel('hall-left', 'hall-left-static', lp.left);
       if (lp.front) setCenterTopMode('image', lp.front);
@@ -1009,6 +1020,10 @@ function activateBLightPhase() {
         if (cbImg) cbImg.src = lp.floor;
       }
       placeHallHotspots(lp.hotspots || []);
+      requestAnimationFrame(() => {
+        cover.style.opacity = '0';
+        setTimeout(() => cover.remove(), 600);
+      });
     });
   });
 }
@@ -1979,27 +1994,10 @@ function initHallBubble() {
         });
         if (card) {
           card.classList.toggle('show');
-          // 카드 위치 — + 클릭 우측에. 우측으로 빠지면 좌측으로 flip. 슬라이드 안 clamp.
-          if (card.classList.contains('show')) {
-            const sr = slideEl.getBoundingClientRect();
-            const hr = hs.getBoundingClientRect();
-            const hsCx = (hr.left + hr.width  / 2) - sr.left;
-            const hsCy = (hr.top  + hr.height / 2) - sr.top;
-            // 카드 크기 측정 — 보이게 만든 직후 한 프레임 뒤 측정
-            requestAnimationFrame(() => {
-              const cw = card.offsetWidth;
-              const ch = card.offsetHeight;
-              let left = hsCx + hr.width / 2 + 14;   // + 우측
-              let top  = hsCy - ch / 2;
-              if (left + cw > sr.width - 8) left = hsCx - hr.width / 2 - 14 - cw;   // 우측 빠지면 좌로 flip
-              if (left < 8) left = 8;
-              if (top  < 8) top  = 8;
-              if (top + ch > sr.height - 8) top = sr.height - ch - 8;
-              card.style.left = (left / sr.width  * 100) + '%';
-              card.style.top  = (top  / sr.height * 100) + '%';
-              card.style.bottom = 'auto';
-            });
-          }
+          // 위치는 CSS 의 고정값 (우측 하단) — 이전 dynamic inline style 잔존 있으면 초기화
+          card.style.left = '';
+          card.style.top  = '';
+          card.style.bottom = '';
         }
       }
       return;
@@ -2061,19 +2059,32 @@ function showHallPopup(src, hostEl, opts) {
   if (opts && opts.clickX != null && opts.clickY != null && hostEl) {
     popup.classList.add('no-dim');
     const place = () => {
-      if (myVersion !== _popupVersion) return;   // 이전 호출 응답 무시
+      if (myVersion !== _popupVersion) return;
       const pr = hostEl.getBoundingClientRect();
       const cx = opts.clickX - pr.left;
       const cy = opts.clickY - pr.top;
-      const maxW = pr.width  * 0.30;
-      const maxH = pr.height * 0.40;
+      const maxW = pr.width  * 0.22;     // 사용자 요청 — popup 더 작게
+      const maxH = pr.height * 0.32;
       img.style.maxWidth  = maxW + 'px';
       img.style.maxHeight = maxH + 'px';
       const iw = img.offsetWidth  || maxW;
       const ih = img.offsetHeight || maxH;
-      const wantLeft = opts.side === 'left';
-      let left = wantLeft ? cx - iw - 18 : cx + 18;
-      let top  = cy - ih / 2;
+      // side: 'right'(기본) / 'left' / 'top' / 'bottom'
+      const side = opts.side || 'right';
+      let left, top;
+      if (side === 'left') {
+        left = cx - iw - 18;
+        top  = cy - ih / 2;
+      } else if (side === 'top') {
+        left = cx - iw / 2;
+        top  = cy - ih - 18;
+      } else if (side === 'bottom') {
+        left = cx - iw / 2;
+        top  = cy + 18;
+      } else {   // right
+        left = cx + 18;
+        top  = cy - ih / 2;
+      }
       if (left < 8) left = 8;
       if (left + iw > pr.width - 8) left = pr.width - iw - 8;
       if (top  < 8) top  = 8;
@@ -2081,7 +2092,7 @@ function showHallPopup(src, hostEl, opts) {
       img.style.position = 'absolute';
       img.style.left = left + 'px';
       img.style.top  = top  + 'px';
-      img.style.visibility = '';   // 위치 잡힌 뒤에 노출
+      img.style.visibility = '';
     };
     img.onload = () => { if (myVersion === _popupVersion) place(); };
     img.src = src;
