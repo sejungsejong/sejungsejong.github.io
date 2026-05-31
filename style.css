@@ -989,6 +989,30 @@ body {
 .hall-right-toggle:hover .hall-toggle-img { filter: brightness(0.78); }
 
 /* B관 스타일 — 회화는 그대로 보이지만 항상 검정 반투명이 덮이고 라벨이 노출됨 */
+/* B관 밝은배경 활성화 시 좌 패널 좌측에 노출 — 그라데이션/dim 없이 텍스트 + 작은 박스만 */
+.b-light-exit {
+  position: absolute;
+  left: 3%;
+  top:  50%;
+  transform: translateY(-50%);
+  z-index: 40;
+  display: none;
+  background: rgba(255, 255, 255, 0.88);
+  color: #1a1a1a;
+  font-size: clamp(11px, 1.4vh, 14px);
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  padding: 9px 14px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.b-light-exit:hover { background: #fff; }
+.b-light-exit:active { transform: translateY(-50%) scale(0.97); }
+body.b-light-active .b-light-exit { display: block; }
+
 .hall-right-toggle.always-overlay .hall-toggle-img        { filter: brightness(0.55); }
 .hall-right-toggle.always-overlay:hover .hall-toggle-img  { filter: brightness(0.42); }
 .hall-right-toggle.always-overlay .hall-toggle-overlay    { background: rgba(0, 0, 0, 0.32); }

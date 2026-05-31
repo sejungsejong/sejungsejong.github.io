@@ -748,6 +748,7 @@ function returnToLobby() {
   _bPhase = 'dark';
   _immersiveOn = false;
   currentHall = null;
+  document.body.classList.remove('b-light-active');
 }
 
 // ============================================================
@@ -1027,6 +1028,11 @@ function activateBLightPhase() {
         if (cbImg) cbImg.src = lp.floor;
       }
       placeHallHotspots(lp.hotspots || []);
+      // 밝은 배경 활성화 — body 클래스 토글 + 우 toggle 의 always-overlay (dim/라벨) 제거.
+      //  좌 패널 좌측의 .b-light-exit 버튼이 노출되어 로비 나가기 CTA 담당.
+      document.body.classList.add('b-light-active');
+      const tgWrap = document.getElementById('hall-right-toggle');
+      if (tgWrap) tgWrap.classList.remove('always-overlay');
       requestAnimationFrame(() => {
         cover.style.opacity = '0';
         setTimeout(() => cover.remove(), 600);
@@ -2397,6 +2403,13 @@ function initHallToggleReturn() {
   const exitBtn = document.getElementById('hall-right-exit');
   if (exitBtn) {
     exitBtn.addEventListener('click', () => {
+      returnToLobby();
+    });
+  }
+  // B관 밝은배경 좌측 exit 버튼
+  const bLightExit = document.getElementById('b-light-exit');
+  if (bLightExit) {
+    bLightExit.addEventListener('click', () => {
       returnToLobby();
     });
   }
