@@ -1360,14 +1360,12 @@ function hideEntryGuide() {
 function initEntryGuide() {
   const overlay = document.getElementById('hall-entry-guide');
   if (!overlay) return;
-  // 각 영역 cell 만 개별 dismiss. center-bottom 은 dim 없음 → skip.
+  // 어떤 cell 클릭해도 모든 cell 한꺼번에 dismiss + overlay 닫기 (사용자 요청)
   overlay.querySelectorAll('.heg-cell[data-region]').forEach((cell) => {
     cell.addEventListener('click', (e) => {
       e.stopPropagation();
-      cell.classList.add('dismissed');
-      // 모든 영역이 dismissed 되면 overlay 자체도 숨김 (pointer-events 회수)
-      const remaining = overlay.querySelectorAll('.heg-cell[data-region]:not(.dismissed)').length;
-      if (remaining === 0) hideEntryGuide();
+      overlay.querySelectorAll('.heg-cell[data-region]').forEach((c) => c.classList.add('dismissed'));
+      hideEntryGuide();
     });
   });
 }
