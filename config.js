@@ -271,9 +271,8 @@ export const config = {
         image: 'assets/works/B/dark/right.png',
         toggle: {
           image: 'assets/works/B/dark/right.png',
-          label: '로비로\n나가기',
-          alwaysOverlay: true,
-          returnAfterHoverMs: 2000,
+          label: '',          // 활성화 전엔 label/dim 안 보임 — 좌측 exit 는 활성화 후에만
+          alwaysOverlay: false,
         },
       },
       // 어두운배경(default) 에선 + 핫스팟 없음.
