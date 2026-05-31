@@ -2010,9 +2010,9 @@ function initHallBubble() {
             requestAnimationFrame(() => {
               const cw = card.offsetWidth;
               const ch = card.offsetHeight;
-              let left = hsCx + hr.width / 2 + 12;
+              // + 시각 마크 기준 우측 가까이 — invisible 핫스팟 width 기반 offset 대신 고정 22px
+              let left = hsCx + 22;
               let top  = hsCy - ch / 2;
-              // flip 없이 clamp 만 — + 가까이 유지
               if (left + cw > sr.width  - 8) left = sr.width  - cw - 8;
               if (left < 8) left = 8;
               if (top  + ch > sr.height - 8) top  = sr.height - ch - 8;

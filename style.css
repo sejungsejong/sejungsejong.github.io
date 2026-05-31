@@ -1110,9 +1110,9 @@ body {
 .cv-close {
   position: absolute;
   top: -10px;
-  right: -10px;
-  width: clamp(24px, 3vh, 32px);
-  height: clamp(24px, 3vh, 32px);
+  left: -10px;            /* 우측 상단 → 좌측 상단 */
+  width: clamp(20px, 2.5vh, 26px);
+  height: clamp(20px, 2.5vh, 26px);
   border-radius: 50%;
   background: #fff;
   border: 1px solid rgba(0, 0, 0, 0.08);
