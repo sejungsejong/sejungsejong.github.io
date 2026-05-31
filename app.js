@@ -618,19 +618,25 @@ function playHallTransition(t, hall, onDone) {
   };
   Promise.all([videoEndedP, hallPreloadP]).then(finish);
 
-  // 4 비디오 모두 첫 frame 디코딩 완료될 때까지 visibility:hidden → 그 뒤 동시 show.
-  //  play() Promise 해결 시점 + rAF 한 프레임 후가 첫 frame 페인트된 시점.
+  // 모든 비디오 hide → play → 각각 첫 frame 실제 페인트(requestVideoFrameCallback) 완료 시 동시 show.
+  //  rVFC 미지원 (Safari 구버전) 일 때는 play()+rAF 폴백.
   vids.forEach((v) => { v.style.visibility = 'hidden'; });
-  const playPromises = vids.map((v) => {
+  const firstFrameP = vids.map((v) => new Promise((resolve) => {
     const p = v.play();
     if (p && p.catch) p.catch((err) => console.warn('[transition] play failed:', err));
-    return p && p.then ? p.catch(() => {}) : Promise.resolve();
-  });
-  Promise.all(playPromises).then(() => {
-    // 첫 frame 페인트 보장 — 추가 rAF 2번 후 visibility 복구 (4 video 한 frame 에 동시 노출)
-    requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (typeof v.requestVideoFrameCallback === 'function') {
+      v.requestVideoFrameCallback(() => resolve());
+    } else {
+      // 폴백 — play 후 rAF 2 프레임
+      if (p && p.then) p.then(() => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      else requestAnimationFrame(() => requestAnimationFrame(resolve));
+    }
+    setTimeout(resolve, 3000);   // 안전장치
+  }));
+  Promise.all(firstFrameP).then(() => {
+    requestAnimationFrame(() => {
       vids.forEach((v) => { v.style.visibility = ''; });
-    }));
+    });
   });
 }
 
@@ -926,8 +932,9 @@ function applyHallConfig(hall) {
           x: p.x,
           y: p.y,
           popupImage: p.popupImage,
-          colorVariation: p.colorVariation,   // slide-4: HTML color variation 카드 toggle
-          invisible: true,    // 자산 안에 +가 이미 그려져 있어 추가 마크 안 그림
+          colorVariation: p.colorVariation,
+          popupSide: p.popupSide,   // config 의 'left'/'right'/'top'/'bottom' 전달
+          invisible: true,
         });
       });
     });
@@ -1994,10 +2001,27 @@ function initHallBubble() {
         });
         if (card) {
           card.classList.toggle('show');
-          // 위치는 CSS 의 고정값 (우측 하단) — 이전 dynamic inline style 잔존 있으면 초기화
-          card.style.left = '';
-          card.style.top  = '';
-          card.style.bottom = '';
+          // 카드를 + 우측에 배치 — 슬라이드 안 clamp
+          if (card.classList.contains('show')) {
+            const sr = slideEl.getBoundingClientRect();
+            const hr = hs.getBoundingClientRect();
+            const hsCx = (hr.left + hr.width  / 2) - sr.left;
+            const hsCy = (hr.top  + hr.height / 2) - sr.top;
+            requestAnimationFrame(() => {
+              const cw = card.offsetWidth;
+              const ch = card.offsetHeight;
+              let left = hsCx + hr.width / 2 + 12;
+              let top  = hsCy - ch / 2;
+              // flip 없이 clamp 만 — + 가까이 유지
+              if (left + cw > sr.width  - 8) left = sr.width  - cw - 8;
+              if (left < 8) left = 8;
+              if (top  + ch > sr.height - 8) top  = sr.height - ch - 8;
+              if (top  < 8) top  = 8;
+              card.style.left = (left / sr.width  * 100) + '%';
+              card.style.top  = (top  / sr.height * 100) + '%';
+              card.style.bottom = 'auto';
+            });
+          }
         }
       }
       return;

@@ -1092,12 +1092,13 @@ body {
    기본 숨김. slide-4 의 + 클릭 → .show 추가 → 등장. 동그라미 active 시 흰색 체크 표시. */
 .color-variation {
   position: absolute;
-  right: 4%;        /* 좌측 → 우측 (사용자 요청) */
-  bottom: 5%;
-  width: 24%;       /* 34% → 24% (더 작게) */
-  padding: 8px 11px;
+  /* + 클릭 우측에 동적 배치 — JS 가 left/top 을 inline 으로 설정 */
+  left: 50%;
+  top:  50%;
+  width: 22%;
+  padding: 7px 9px;       /* 비례 축소 */
   background: #fff;
-  border-radius: 12px;
+  border-radius: 10px;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
   z-index: 4;
   pointer-events: auto;
@@ -1136,24 +1137,24 @@ body {
 .cv-close:hover { background: #f4f4f4; }
 .cv-close:active { transform: scale(0.94); }
 .cv-label {
-  font-size: clamp(11px, 1.3vh, 13px);
+  font-size: clamp(9px, 1.1vh, 11px);     /* 축소 */
   font-weight: 700;
   color: #111;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 .cv-dots {
   display: flex;
-  gap: 10px;
+  gap: 7px;
   justify-content: flex-start;
   align-items: center;
 }
 .cv-dot {
   position: relative;
-  width: clamp(20px, 2.8vh, 28px);
-  height: clamp(20px, 2.8vh, 28px);
+  width: clamp(14px, 2vh, 20px);          /* 축소 */
+  height: clamp(14px, 2vh, 20px);
   border-radius: 50%;
   background: var(--c);
-  border: 2px solid rgba(255, 255, 255, 0.6);
+  border: 1.5px solid rgba(255, 255, 255, 0.6);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
   cursor: pointer;
   padding: 0;
